@@ -14,8 +14,7 @@ The dashboard will present resources to help users understand the telehealth lan
 ### **User-Centric Telehealth Search**
 The application will support users who want to:
 - Filter telehealth providers by location, medical specialty, and insurance compatibility.
-- Access a user-friendly interface to compare services like video consultations, chat-based support, or phone consultations.
-- Book appointments directly through the dashboard, providing a seamless experience for patients.
+- Access a user-friendly interface to compare services like video consultations, chat-based support, or phone consultations, linking users directly to websites where they can book appointments.
 
 Concurrency and scalability features afforded by the Rust programming language will ensure that multiple users can connect to the dashboard at once without compromising the responsiveness of the dashboard.
 
