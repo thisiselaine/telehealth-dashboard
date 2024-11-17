@@ -9,7 +9,7 @@ The **Health Options Educational Dashboard** is a web-based application written 
 The application will support users who want to:
 - Filter providers by location and medical specialty.
 - Access a user-friendly interface to compare services like video consultations, chat-based support, or phone consultations, linking users directly to websites where they can book appointments.
-- 
+
 ### **Real-Time Data**
 Leverage real-time data from telehealth providers to:
 - Display up-to-date service availability and allow users to check medical specialty.
