@@ -1,11 +1,11 @@
-# Telehealth Options Educational Dashboard
+# Health Options Educational Dashboard
 
 ## Project Overview
 
-The **Telehealth Options Educational Dashboard** is a web-based application written in Rust, designed to educate users about local health clinic options, help them navigate various providers, and book appointments. The project aims to bridge the gap between users and healthcare providers by offering a clear, interactive, and secure way to access health services. 
+The **Health Options Educational Dashboard** is a web-based application written in Rust, designed to educate users about local health clinic options, help them navigate various providers, and book appointments. The project aims to bridge the gap between users and healthcare providers by offering a clear, interactive, and secure way to access health services. 
 
 ## Objectives
-### **User-Centric Telehealth Search**
+### **User-Centric Health Search**
 The application will support users who want to:
 - Filter providers by location and medical specialty.
 - Access a user-friendly interface to compare services like video consultations, chat-based support, or phone consultations, linking users directly to websites where they can book appointments.
