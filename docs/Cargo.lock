@@ -209,20 +209,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "actix_frontend"
-version = "0.1.0"
-dependencies = [
- "actix-files",
- "actix-web",
- "dotenv",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "urlencoding",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -495,6 +481,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "docs"
+version = "0.1.0"
+dependencies = [
+ "actix-files",
+ "actix-web",
+ "dotenv",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "urlencoding",
 ]
 
 [[package]]
