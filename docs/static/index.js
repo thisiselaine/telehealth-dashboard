@@ -1,42 +1,64 @@
 // Function to fetch health services based on zip code and display results
-async function fetchHealthServices(zip) {
+async function fetchHealthServices(location, useCurLocation) {
     const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
     const headerDiv = document.getElementById('resultsHeader');
+    const carouselDiv = document.getElementById('resultsCarousel');
 
     try {
-        // Fetch data from the backend API
-        const response = await fetch(`/services?zip=${zip}`);
+        let response = null;
+        if(!useCurLocation){
+            response = await fetch(`/services?zip=${location}`);
+        }else{
+            response = await fetch(`/services?lat=${location.lat}&lng=${location.lng}`);
+        }
         if (!response.ok) {
             throw new Error('Failed to fetch health services');
         }
 
         const data = await response.json();
-        console.log('API Response:', data);
-
         const { coordinates, providers } = data;
 
-        // Clear previous results
         clearResults();
+        carouselDiv.hidden = false;
 
-        // Update the map
-        updateMap(coordinates, providers);
+        // Update the map and get markers
+        const markers = await updateMap(coordinates, providers, useCurLocation);
 
-        // Update the header
         const resultCount = providers ? providers.length : 0;
-        headerDiv.innerHTML = `${resultCount} results found for ZIP code ${zip}`;
+        
+        if(useCurLocation){
+            headerDiv.innerHTML = `${resultCount} results found at current location`;
+        }else{
+            headerDiv.innerHTML = `${resultCount} results found for ZIP code ${location}`;
+        }
 
-        // Handle empty results
         if (!providers || providers.length === 0) {
             carouselInner.innerHTML = '<div class="carousel-item"><p>No health services found.</p></div>';
             return;
         }
 
-        // Populate carousel with cards
+        // Populate carousel and link cards to markers
         providers.forEach((service) => {
-            // Use createServiceCard to generate the card
             const card = createServiceCard(service);
 
-            // Append the card to the carousel-inner
+            // Find the corresponding marker
+            console.log(typeof(markers));
+            const markerEntry = markers.find(({ provider }) => provider.name === service.name && provider.address === service.address);
+
+            if (markerEntry) {
+                card.addEventListener('click', () => {
+                    // Close all open InfoWindows
+                    markers.forEach(({ infoWindow }) => infoWindow.close());
+
+                    // Open the corresponding InfoWindow
+                    markerEntry.infoWindow.open(markerEntry.marker.getMap(), markerEntry.marker);
+                    currentInfoWindow = markerEntry.infoWindow;
+
+                    // Pan to the marker's position
+                    markerEntry.marker.getMap().panTo(markerEntry.marker.getPosition());
+                });
+            }
+
             carouselInner.appendChild(card);
         });
     } catch (error) {
@@ -45,66 +67,90 @@ async function fetchHealthServices(zip) {
     }
 }
 
-function updateMap(coordinates, providers) {
-    // Center the map on the provided coordinates
+
+
+function updateMap(coordinates, providers, useCurLocation) {
     if (!coordinates || !coordinates.lat || !coordinates.lng) {
         console.error('Invalid center coordinates:', coordinates);
         alert('Unable to center map due to invalid coordinates.');
         return;
     }
 
-    // Unhide the map
     const mapDiv = document.getElementById('map');
     mapDiv.hidden = false;
 
-    // Initialize the map
     const map = new google.maps.Map(mapDiv, {
         center: { lat: coordinates.lat, lng: coordinates.lng },
         zoom: 12,
     });
 
-    // Initialize Google Maps Geocoder
+    if(useCurLocation){
+        showUserLocation(map, coordinates);
+    }
+
     const geocoder = new google.maps.Geocoder();
 
-    // Add markers for each provider using their addresses
-    providers.forEach(provider => {
+    const markers = []; // Proper array to store markers
+
+    // Wrap geocoding in promises to handle async operations
+    const geocodePromises = providers.map((provider) => {
         if (!provider.address) {
             console.warn(`Skipping provider ${provider.name}: Missing address`);
-            return;
+            return Promise.resolve(); // Resolve immediately for missing addresses
         }
 
-        // Geocode the provider's address to get coordinates
-        geocoder.geocode({ address: provider.address }, (results, status) => {
-            if (status === 'OK' && results[0]) {
-                const location = results[0].geometry.location;
+        return new Promise((resolve) => {
+            geocoder.geocode({ address: provider.address }, (results, status) => {
+                if (status === 'OK' && results[0]) {
+                    const location = results[0].geometry.location;
 
-                // Create a marker using the geocoded location
-                const marker = new google.maps.Marker({
-                    position: location,
-                    map: map,
-                    title: provider.name,
-                });
+                    // Create a marker
+                    const marker = new google.maps.Marker({
+                        position: location,
+                        map: map,
+                        title: provider.name,
+                    });
 
-                const infoWindow = new google.maps.InfoWindow({
-                    content: `
-                        <div>
-                            <h3>${provider.name}</h3>
-                            <p>${provider.address}</p>
-                            <p>${provider.phone ? `Phone: ${provider.phone}` : ''}</p>
-                            <p>${provider.rating ? `Rating: ${provider.rating}` : ''}</p>
-                        </div>
-                    `,
-                });
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `
+                            <div>
+                                <h3>${provider.name}</h3>
+                                <p>${provider.address}</p>
+                                <p>${provider.phone ? `Phone: ${provider.phone}` : ''}</p>
+                                <p>${provider.rating ? `Rating: ${provider.rating}` : ''}</p>
+                            </div>
+                        `,
+                    });
 
-                marker.addListener('click', () => {
-                    infoWindow.open(map, marker);
-                });
-            } else {
-                console.warn(`Geocoding failed for provider ${provider.name}: ${status}`);
-            }
+                    marker.addListener('click', () => {
+                        if (currentInfoWindow) {
+                            currentInfoWindow.close();
+                        }
+                        infoWindow.open(map, marker);
+                        currentInfoWindow = infoWindow;
+                    });
+
+                    // Add to markers array
+                    markers.push({ marker, infoWindow, provider });
+                } else {
+                    console.warn(`Geocoding failed for provider ${provider.name}: ${status}`);
+                }
+
+                resolve(); // Resolve the promise
+            });
         });
     });
+
+    // Wait for all geocoding tasks to complete
+    return Promise.all(geocodePromises).then(() => {
+        console.log('All geocoding completed. Markers:', markers);
+        return markers; // Return the fully populated markers array
+    });
 }
+
+
+
+
 
 // Function to create a Bootstrap card for a service
 function createServiceCard(service) {
@@ -134,6 +180,10 @@ function createServiceCard(service) {
 function clearResults() {
     const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
     const headerDiv = document.getElementById('resultsHeader');
+    const carouselDiv = document.getElementById('resultsCarousel');
+    const mapDiv = document.getElementById('map');
+    mapDiv.hidden = true;
+    carouselDiv.hidden=true;
     carouselInner.innerHTML = ''; // Clear carousel items
     headerDiv.innerHTML = ''; // Clear the header text
 }
@@ -149,7 +199,22 @@ document.getElementById('zipForm').addEventListener('submit', function(e) {
     e.preventDefault(); // Prevent form from reloading the page
 
     const zip = document.getElementById('zip').value; // Get the zip code from the input
-    fetchHealthServices(zip); // Call the fetchHealthServices function with the zip code
+    fetchHealthServices(zip, false); // Call the fetchHealthServices function with the zip code
+});
+
+// Event listener for the form submission
+document.getElementById('searchBtn').addEventListener('click', function(e) {
+    e.preventDefault(); // Prevent form from reloading the page
+
+    const zip = document.getElementById('zip').value; // Get the zip code from the input
+    fetchHealthServices(zip, false); // Call the fetchHealthServices function with the zip code
+});
+
+document.getElementById('locationBtn').addEventListener('click', async function(e) {
+    e.preventDefault(); // Prevent form from reloading the page
+
+    userLocation = await getUserLocation();
+    fetchHealthServices(userLocation, true); // Call the fetchHealthServices function with the zip code
 });
 
 let map;
@@ -201,4 +266,43 @@ function populateCarousel(results) {
     });
 }
 
+function getUserLocation() {
+    return new Promise((resolve, reject) => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+                    resolve({ lat: userLat, lng: userLng });
+                },
+                (error) => {
+                    console.error("Error getting user location:", error);
+                    alert("Unable to retrieve your location. Please allow location access.");
+                    reject(error);
+                }
+            );
+        } else {
+            alert("Geolocation is not supported by this browser.");
+            reject(new Error("Geolocation not supported"));
+        }
+    });
+}
+
+function showUserLocation(map, userLocation) {
+    map.setCenter(userLocation);
+
+    // Add a marker for the user's location
+    new google.maps.Marker({
+        position: userLocation,
+        map: map,
+        title: "Your Location",
+        icon: {
+            url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png", // Blue marker for user
+        },
+    });
+
+    console.log("User location:", userLocation);
+}
+
 loadGoogleMaps();
+let currentInfoWindow = null;

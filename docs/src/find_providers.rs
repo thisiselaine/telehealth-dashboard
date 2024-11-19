@@ -14,8 +14,8 @@ pub struct HealthProvider {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Coordinates {
-    lat: f64,
-    lng: f64,
+    pub lat: f64,
+    pub lng: f64,
 }
 
 pub async fn geocode_address(address: &str, api_key: &str) -> Result<Coordinates, Box<dyn Error>> {
@@ -46,7 +46,7 @@ pub async fn find_health_providers(
     api_key: &str,
 ) -> Result<Vec<HealthProvider>, Box<dyn Error>> {
     let url = format!(
-        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={},{}&radius={}&type=hospital|doctor|health&key={}",
+        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={},{}&radius={}&type=dentist|drugstore|pharmacy|physiotherapist|hospital|doctor|health&key={}",
         coordinates.lat, coordinates.lng, radius_meters, api_key
     );
 

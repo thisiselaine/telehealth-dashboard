@@ -1,34 +1,42 @@
 mod find_providers;
-use find_providers::{geocode_address, find_health_providers};
+use find_providers::{geocode_address, find_health_providers, Coordinates};
 
 use actix_files as fs; // For static file serving
 use actix_web::{web, App, HttpServer, Responder, HttpResponse};
 use serde_json::json;
-use serde::Deserialize;
+use serde::{Deserialize};
+
 
 #[derive(Deserialize)]
 struct QueryParams {
-    zip: String,
+    zip: Option<String>,
+    lat: Option<f64>,    // Optional latitude
+    lng: Option<f64>,    // Optional longitude
 }
 
 // Handler for the `/services` endpoint
 async fn services_handler(query: web::Query<QueryParams>) -> impl Responder {
-    let zip = &query.zip;
-
-    // Load the Google Maps API key from environment
     let api_key = std::env::var("GOOGLE_MAPS_API_KEY")
         .expect("GOOGLE_MAPS_API_KEY must be set in environment");
 
-    // Attempt to geocode the zip code
-    let coordinates = match geocode_address(zip, &api_key).await {
-        Ok(coords) => coords,
-        Err(err) => {
-            eprintln!("Geocoding failed: {}", err);
-            return HttpResponse::InternalServerError().body("Failed to geocode zip code");
+    let coordinates = if let (Some(lat), Some(lng)) = (query.lat, query.lng) {
+        // Use lat/lng if provided
+        // println!("Using provided latitude and longitude: {}, {}", lat, lng);
+        Coordinates { lat, lng }
+    } else if let Some(zip) = query.zip.as_deref() {
+        // Geocode the ZIP code if lat/lng not provided
+        match geocode_address(zip, &api_key).await {
+            Ok(coords) => coords,
+            Err(err) => {
+                eprintln!("Geocoding failed: {}", err);
+                return HttpResponse::InternalServerError().body("Failed to geocode zip code");
+            }
         }
+    } else {
+        // Return an error if neither are provided
+        return HttpResponse::BadRequest().body("Please provide either a ZIP code or lat/lng");
     };
 
-    // Find health providers near the coordinates
     let providers = match find_health_providers(&coordinates, 10000, &api_key).await {
         Ok(providers) => providers,
         Err(err) => {
@@ -37,7 +45,6 @@ async fn services_handler(query: web::Query<QueryParams>) -> impl Responder {
         }
     };
 
-    // Return the list of health providers as JSON
     HttpResponse::Ok().json(json!({
         "coordinates": coordinates,
         "providers": providers,
