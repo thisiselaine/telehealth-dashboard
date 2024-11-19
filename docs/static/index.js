@@ -134,9 +134,10 @@ function updateMap(coordinates, providers, useCurLocation) {
                         content: `
                             <div>
                                 <h3>${provider.name}</h3>
-                                <p>${provider.address}</p>
+                                <img src="${provider.photo_url}" class="img-fluid rounded-start" style="max-width: 200px; height: auto;">
+                                <br><p>${provider.address}</p>
                                 <p>${provider.phone ? `Phone: ${provider.phone}` : ''}</p>
-                                <p>${provider.rating ? `Rating: ${provider.rating}` : ''}</p>
+                                <p>${provider.rating ? `Rating: ${provider.rating.toFixed(1)}` : ''}</p>
                             </div>
                         `,
                     });
