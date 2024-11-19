@@ -51,6 +51,7 @@ pub async fn find_health_providers(
         "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={},{}&radius={}&type={}&key={}",
         coordinates.lat, coordinates.lng, radius_meters, service_type, api_key
     );
+    // println!("{}", url);
 
     let response: serde_json::Value = reqwest::Client::new()
         .get(&url)

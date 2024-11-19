@@ -2,6 +2,15 @@
 async function fetchHealthServices(location, serviceType, useCurLocation) {
     const headerDiv = document.getElementById('resultsHeader');
 
+    if(!serviceType){
+        const serviceTypeDropdown = document.getElementById('serviceType');
+        serviceTypeDropdown.classList.add('is-invalid');
+        headerDiv.innerHTML = '<p class="text-danger">Please specify a service type.</p>';
+        return;
+    }else{
+        document.getElementById('serviceType').classList.remove('is-invalid');
+    }
+
     try {
         let response = null;
         if (!useCurLocation) {
@@ -27,7 +36,6 @@ async function fetchHealthServices(location, serviceType, useCurLocation) {
         } else {
             headerDiv.innerHTML = `${resultCount} results found for ZIP code ${location}`;
         }
-
         if (!providers || providers.length === 0) {
             carouselInner.innerHTML = '<div class="carousel-item"><p>No health services found.</p></div>';
             return;
