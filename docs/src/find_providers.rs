@@ -10,12 +10,13 @@ pub struct HealthProvider {
     provider_type: String,
     phone: Option<String>,
     rating: Option<f32>,
+    photo_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Coordinates {
-    lat: f64,
-    lng: f64,
+    pub lat: f64,
+    pub lng: f64,
 }
 
 pub async fn geocode_address(address: &str, api_key: &str) -> Result<Coordinates, Box<dyn Error>> {
@@ -44,11 +45,13 @@ pub async fn find_health_providers(
     coordinates: &Coordinates,
     radius_meters: u32,
     api_key: &str,
+    service_type: &str,
 ) -> Result<Vec<HealthProvider>, Box<dyn Error>> {
     let url = format!(
-        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={},{}&radius={}&type=hospital|doctor|health&key={}",
-        coordinates.lat, coordinates.lng, radius_meters, api_key
+        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={},{}&radius={}&type={}&key={}",
+        coordinates.lat, coordinates.lng, radius_meters, service_type, api_key
     );
+    // println!("{}", url);
 
     let response: serde_json::Value = reqwest::Client::new()
         .get(&url)
@@ -61,6 +64,18 @@ pub async fn find_health_providers(
 
     if let Some(results) = response["results"].as_array() {
         for result in results {
+
+            let photo_url = result["photos"]
+                .as_array()
+                .and_then(|photos| photos.get(0)) // Get the first photo reference
+                .and_then(|photo| photo["photo_reference"].as_str())
+                .map(|photo_reference| {
+                    format!(
+                        "https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={}&key={}",
+                        photo_reference, api_key
+                    )
+                });
+
             let provider = HealthProvider {
                 name: result["name"].as_str().unwrap_or("").to_string(),
                 address: result["vicinity"].as_str().unwrap_or("").to_string(),
@@ -74,6 +89,7 @@ pub async fn find_health_providers(
                     .as_str()
                     .map(String::from),
                 rating: result["rating"].as_f64().map(|r| r as f32),
+                photo_url,
             };
             providers.push(provider);
         }
@@ -96,39 +112,3 @@ fn calculate_distance(coords: &Coordinates, lat2: f64, lng2: f64) -> f64 {
 
     EARTH_RADIUS * c
 }
-
-// #[tokio::main]
-// async fn main() -> Result<(), Box<dyn Error>> {
-//     dotenv().ok();
-    
-//     let api_key = std::env::var("GOOGLE_MAPS_API_KEY")
-//         .expect("GOOGLE_MAPS_API_KEY must be set in environment");
-    
-//     let address = "123 Main St, Anytown, USA";
-//     let search_radius = 5000; // 5km radius
-
-//     println!("Searching for health providers near: {}", address);
-    
-//     // First get coordinates for the address
-//     let coordinates = geocode_address(address, &api_key).await?;
-    
-//     // Then search for health providers
-//     let providers = find_health_providers(&coordinates, search_radius, &api_key).await?;
-    
-//     // Print results
-//     println!("\nFound {} health providers:", providers.len());
-//     for provider in providers {
-//         println!("\nName: {}", provider.name);
-//         println!("Address: {}", provider.address);
-//         println!("Distance: {:.1} km", provider.distance);
-//         println!("Type: {}", provider.provider_type);
-//         if let Some(phone) = provider.phone {
-//             println!("Phone: {}", phone);
-//         }
-//         if let Some(rating) = provider.rating {
-//             println!("Rating: {:.1}", rating);
-//         }
-//     }
-
-//     Ok(())
-// }

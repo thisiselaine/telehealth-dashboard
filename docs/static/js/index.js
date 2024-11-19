@@ -1,83 +1,137 @@
 // Function to fetch health services based on zip code and display results
-async function fetchHealthServices(zip) {
-    const resultsDiv = document.getElementById('results');
+async function fetchHealthServices(location, serviceType, useCurLocation) {
     const headerDiv = document.getElementById('resultsHeader');
 
+    if (!serviceType) {
+        const serviceTypeDropdown = document.getElementById('serviceType');
+        serviceTypeDropdown.classList.add('is-invalid');
+        headerDiv.innerHTML = '<p class="text-danger">Please specify a service type.</p>';
+        return;
+    } else {
+        document.getElementById('serviceType').classList.remove('is-invalid');
+    }
+
     try {
-        // Fetch data from the backend API
-        const response = await fetch(`/services?zip=${zip}`);
+        let response = null;
+        if (!useCurLocation) {
+            response = await fetch(`/services?zip=${location}&service_type=${serviceType}`);
+        } else {
+            response = await fetch(`/services?lat=${location.lat}&lng=${location.lng}&service_type=${serviceType}`);
+        }
         if (!response.ok) {
             throw new Error('Failed to fetch health services');
         }
 
-        const data = await response.json(); // Parse the JSON response
-        console.log(data);
+        const data = await response.json();
         const { coordinates, providers } = data;
-        clearResults(); // Clear previous results before displaying new ones
 
-        updateMap(coordinates, providers);
+        // Update the map and get markers
+        clearResults();
+        const markers = await updateMap(coordinates, providers, useCurLocation);
 
-        // Update the header with the number of results and the zip code
-        const resultCount = providers.length;
-        headerDiv.innerHTML = `${resultCount} results found for ZIP code ${zip}`;
+        const resultCount = providers ? providers.length : 0;
 
-        // Display the health services
-        if (providers.length === 0) {
-            resultsDiv.innerHTML = '<p>No health services found.</p>';
+        if (useCurLocation) {
+            headerDiv.innerHTML = `${resultCount} results found at current location`;
         } else {
-            providers.forEach(service => {
-                // Create and append Bootstrap card for each service
-                const card = createServiceCard(service);
-                resultsDiv.appendChild(card);
-            });
+            headerDiv.innerHTML = `${resultCount} results found for ZIP code ${location}`;
         }
+        if (!providers || providers.length === 0) {
+            carouselInner.innerHTML = '<div class="carousel-item"><p>No health services found.</p></div>';
+            return;
+        }
+
+        populateCarousel(providers, markers);
     } catch (error) {
         console.error('Error fetching health services:', error);
+        headerDiv.innerHTML = '<p class="text-danger">Failed to load health services.</p>';
     }
 }
 
-function updateMap(coordinates, providers) {
-    // Center the map on the provided coordinates
+function populateCarousel(providers, markers) {
+    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
+    const carouselDiv = document.getElementById('resultsCarousel');
+    carouselDiv.hidden = false;
+
+    // Sort providers by rating (descending order)
+    providers.sort((a, b) => {
+        // Handle cases where ratings are missing
+        const ratingA = a.rating || 0;
+        const ratingB = b.rating || 0;
+        return ratingB - ratingA;
+    });
+
+    // Populate carousel and link cards to markers
+    providers.forEach((service) => {
+        const card = createServiceCard(service);
+
+        // Find the corresponding marker
+        const markerEntry = markers.find(({ provider }) => provider.name === service.name && provider.address === service.address);
+
+        if (markerEntry) {
+            card.addEventListener('click', () => {
+                // Close all open InfoWindows
+                markers.forEach(({ infoWindow }) => infoWindow.close());
+
+                // Open the corresponding InfoWindow
+                markerEntry.infoWindow.open(markerEntry.marker.getMap(), markerEntry.marker);
+                currentInfoWindow = markerEntry.infoWindow;
+
+                // Pan to the marker's position
+                markerEntry.marker.getMap().panTo(markerEntry.marker.getPosition());
+            });
+        }
+
+        carouselInner.appendChild(card);
+    });
+}
+
+
+
+function updateMap(coordinates, providers, useCurLocation) {
     if (!coordinates || !coordinates.lat || !coordinates.lng) {
         console.error('Invalid center coordinates:', coordinates);
         alert('Unable to center map due to invalid coordinates.');
         return;
     }
 
-    // Unhide the map
     const mapDiv = document.getElementById('map');
     mapDiv.hidden = false;
 
-    // Initialize the map
     const map = new google.maps.Map(mapDiv, {
         center: { lat: coordinates.lat, lng: coordinates.lng },
         zoom: 12,
     });
 
-    // Initialize Google Maps Geocoder
+    if (useCurLocation) {
+        showUserLocation(map, coordinates);
+    }
+
     const geocoder = new google.maps.Geocoder();
 
-    // Add markers for each provider using their addresses
-    providers.forEach(provider => {
+    const markers = []; // Proper array to store markers
+
+    // Wrap geocoding in promises to handle async operations
+    const geocodePromises = providers.map((provider) => {
                 if (!provider.address) {
                     console.warn(`Skipping provider ${provider.name}: Missing address`);
-                    return;
+                    return Promise.resolve(); // Resolve immediately for missing addresses
                 }
 
-                // Geocode the provider's address to get coordinates
-                geocoder.geocode({ address: provider.address }, (results, status) => {
-                            if (status === 'OK' && results[0]) {
-                                const location = results[0].geometry.location;
+                return new Promise((resolve) => {
+                            geocoder.geocode({ address: provider.address }, (results, status) => {
+                                        if (status === 'OK' && results[0]) {
+                                            const location = results[0].geometry.location;
 
-                                // Create a marker using the geocoded location
-                                const marker = new google.maps.Marker({
-                                    position: location,
-                                    map: map,
-                                    title: provider.name,
-                                });
+                                            // Create a marker using the geocoded location
+                                            const marker = new google.maps.Marker({
+                                                position: location,
+                                                map: map,
+                                                title: provider.name,
+                                            });
 
-                                const infoWindow = new google.maps.InfoWindow({
-                                            content: `
+                                            const infoWindow = new google.maps.InfoWindow({
+                                                        content: `
                         <div>
                             <h3>${provider.name}</h3>
                             <p>${provider.address}</p>
@@ -87,30 +141,48 @@ function updateMap(coordinates, providers) {
                     `,
                 });
 
-                marker.addListener('click', () => {
-                    infoWindow.open(map, marker);
-                });
-            } else {
-                console.warn(`Geocoding failed for provider ${provider.name}: ${status}`);
-            }
+                    marker.addListener('click', () => {
+                        if (currentInfoWindow) {
+                            currentInfoWindow.close();
+                        }
+                        infoWindow.open(map, marker);
+                        currentInfoWindow = infoWindow;
+                    });
+
+                    // Add to markers array
+                    markers.push({ marker, infoWindow, provider });
+                } else {
+                    console.warn(`Geocoding failed for provider ${provider.name}: ${status}`);
+                }
+
+                resolve(); // Resolve the promise
+            });
         });
+    });
+
+    // Wait for all geocoding tasks to complete
+    return Promise.all(geocodePromises).then(() => {
+        console.log('All geocoding completed. Markers:', markers);
+        return markers; // Return the fully populated markers array
     });
 }
 
 // Function to create a Bootstrap card for a service
 function createServiceCard(service) {
     const card = document.createElement('div');
-    card.classList.add('card', 'mb-3'); // Bootstrap card classes
+    card.classList.add('card'); // Bootstrap card classes
 
     card.innerHTML = `
         <div class="row g-0">
             <div class="col-md-4">
-                <img src="/static/images/${service.imageUrl || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
+                <img src="/static/images/${service.photo_url || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
             </div>
             <div class="col-md-8">
                 <div class="card-body">
                     <h5 class="card-title">${service.name}</h5>
                     <p class="card-text">${service.address}</p>
+                    <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
+                    <p class = ""card-text>${service.rating ? `Rating: ${service.rating.toFixed(1)}` : ''}</p>
                 </div>
             </div>
         </div>
@@ -121,10 +193,14 @@ function createServiceCard(service) {
 
 // Function to clear the search results
 function clearResults() {
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = ''; // Clear all content in the results div
-    // Clear the text in the input field
-    document.getElementById('zip').value = '';
+    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
+    const headerDiv = document.getElementById('resultsHeader');
+    const carouselDiv = document.getElementById('resultsCarousel');
+    const mapDiv = document.getElementById('map');
+    mapDiv.hidden = true;
+    carouselDiv.hidden=true;
+    carouselInner.innerHTML = ''; // Clear carousel items
+    headerDiv.innerHTML = ''; // Clear the header text
 }
 
 // Event listener for the clear button
@@ -138,7 +214,24 @@ document.getElementById('zipForm').addEventListener('submit', function(e) {
     e.preventDefault(); // Prevent form from reloading the page
 
     const zip = document.getElementById('zip').value; // Get the zip code from the input
-    fetchHealthServices(zip); // Call the fetchHealthServices function with the zip code
+    const serviceType = document.getElementById('serviceType').value;
+    fetchHealthServices(zip, serviceType, false); // Call the fetchHealthServices function with the zip code
+});
+
+// Event listener for the form submission
+document.getElementById('searchBtn').addEventListener('click', function(e) {
+    e.preventDefault(); // Prevent form from reloading the page
+    const serviceType = document.getElementById('serviceType').value;
+    const zip = document.getElementById('zip').value; // Get the zip code from the input
+    fetchHealthServices(zip, serviceType, false); // Call the fetchHealthServices function with the zip code
+});
+
+document.getElementById('locationBtn').addEventListener('click', async function(e) {
+    e.preventDefault(); // Prevent form from reloading the page
+
+    userLocation = await getUserLocation();
+    const serviceType = document.getElementById('serviceType').value;
+    fetchHealthServices(userLocation, serviceType, true); // Call the fetchHealthServices function with the zip code
 });
 
 let map;
@@ -161,8 +254,6 @@ async function loadGoogleMaps() {
     }
 }
 
-loadGoogleMaps();
-
 
 function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
@@ -170,6 +261,47 @@ function initMap() {
         zoom: 12
     });
 }
+
+function getUserLocation() {
+    return new Promise((resolve, reject) => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+                    resolve({ lat: userLat, lng: userLng });
+                },
+                (error) => {
+                    console.error("Error getting user location:", error);
+                    alert("Unable to retrieve your location. Please allow location access.");
+                    reject(error);
+                }
+            );
+        } else {
+            alert("Geolocation is not supported by this browser.");
+            reject(new Error("Geolocation not supported"));
+        }
+    });
+}
+
+function showUserLocation(map, userLocation) {
+    map.setCenter(userLocation);
+
+    // Add a marker for the user's location
+    new google.maps.Marker({
+        position: userLocation,
+        map: map,
+        title: "Your Location",
+        icon: {
+            url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png", // Blue marker for user
+        },
+    });
+
+    console.log("User location:", userLocation);
+}
+
+loadGoogleMaps();
+let currentInfoWindow = null;
 
 // // Function to listen to clicks on the logout link element ID
 // function setupLogoutListener() {

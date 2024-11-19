@@ -29,7 +29,39 @@
         #map {
             flex: 1;
             margin-top: 30px;
-            height: 500px;
+            height: 540px;
+        }
+        
+        #resultsCarousel {
+            max-height: 500px; /* Limit height */
+            overflow-y: auto; /* Enable vertical scrolling */
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+
+        #resultsCarousel .carousel-inner {
+            display: flex;
+            flex-direction: column; /* Arrange items vertically */
+            gap: 15px; /* Spacing between cards */
+        }
+
+        #resultsCarousel .carousel-item {
+            flex: 0 0 auto; /* Prevent shrinking */
+        }
+
+        .card {
+            margin: 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            cursor: pointer; /* Make cursor appear clickable */
+        }
+
+        .card:hover {
+            transform: scale(1.02); /* Slightly enlarge the card */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow for emphasis */
         }
     </style>
 </head>
@@ -78,9 +110,22 @@
         <form id="zipForm" class="d-flex mb-3">
             <div class="input-group">
                 <input type="text" class="form-control" id="zip" name="zip" placeholder="Enter your ZIP code" aria-label="zip" aria-describedby="basic-addon2" required>
-                <button type="button" class="btn btn-outline-primary"> 
+                <button type="button" id="searchBtn" class="btn btn-outline-primary">
                     Search <i class="fa-solid fa-magnifying-glass"></i>
                 </button>
+                <button type="button" id="locationBtn" class="btn btn-outline-success">
+                    Use My Location <i class="fa-solid fa-location-dot"></i>
+                </button>
+                <select id="serviceType" class="form-select" style="max-width: 200px; margin-right: 10px;">
+                    <option value="" selected disabled>Service Type</option>
+                    <option value="dentist">Dentist</option>
+                    <option value="drugstore">Drugstore</option>
+                    <option value="pharmacy">Pharmacy</option>
+                    <option value="physiotherapist">Physical Therapy</option>
+                    <option value="hospital">Hospital</option>
+                    <option value="doctor">Doctor</option>
+                    <option value="health">Health</option>
+                </select>
                 <button type="button" id="clearBtn" class="btn btn-outline-secondary">
                     Clear <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -89,7 +134,12 @@
         <div class="results-map-container">
             <div id="results">
                 <h4 id="resultsHeader" class="mb-3"></h4>
-                <!-- Results content will go here -->
+                <!-- Vertical Carousel -->
+                <div id="resultsCarousel" class="vertical-carousel" hidden="true">
+                    <div class="carousel-inner">
+                        <!-- Carousel items will be dynamically added here -->
+                    </div>
+                </div>
             </div>
             <div id="map" hidden="true"></div>
         </div>
