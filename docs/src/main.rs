@@ -3,7 +3,7 @@ use find_providers::{geocode_address, find_health_providers};
 
 use actix_files as fs; // For static file serving
 use actix_web::{web, App, HttpServer, Responder, HttpResponse};
-// use serde_json::json;
+use serde_json::json;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -38,12 +38,18 @@ async fn services_handler(query: web::Query<QueryParams>) -> impl Responder {
     };
 
     // Return the list of health providers as JSON
-    HttpResponse::Ok().json(providers)
+    HttpResponse::Ok().json(json!({
+        "coordinates": coordinates,
+        "providers": providers,
+    }))
 }
 
-// async fn api_handler() -> impl Responder {
-//     HttpResponse::Ok().json(serde_json::json!({ "message": "Hello from API" }))
-// }
+// Handler for the `/api-key` endpoint
+async fn api_key_handler() -> impl Responder {
+    let api_key = std::env::var("GOOGLE_MAPS_API_KEY")
+        .expect("GOOGLE_MAPS_API_KEY must be set in environment");
+    HttpResponse::Ok().body(api_key)
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -52,6 +58,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
+            .route("/api-key", web::get().to(api_key_handler)) // Endpoint to serve the API key
             .route("/services", web::get().to(services_handler)) // Endpoint for health services
             .service(fs::Files::new("/", "./static").index_file("index.html")) // Serve static files
     })
