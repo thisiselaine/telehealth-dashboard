@@ -59,25 +59,25 @@ function updateMap(coordinates, providers) {
 
     // Add markers for each provider using their addresses
     providers.forEach(provider => {
-        if (!provider.address) {
-            console.warn(`Skipping provider ${provider.name}: Missing address`);
-            return;
-        }
+                if (!provider.address) {
+                    console.warn(`Skipping provider ${provider.name}: Missing address`);
+                    return;
+                }
 
-        // Geocode the provider's address to get coordinates
-        geocoder.geocode({ address: provider.address }, (results, status) => {
-            if (status === 'OK' && results[0]) {
-                const location = results[0].geometry.location;
+                // Geocode the provider's address to get coordinates
+                geocoder.geocode({ address: provider.address }, (results, status) => {
+                            if (status === 'OK' && results[0]) {
+                                const location = results[0].geometry.location;
 
-                // Create a marker using the geocoded location
-                const marker = new google.maps.Marker({
-                    position: location,
-                    map: map,
-                    title: provider.name,
-                });
+                                // Create a marker using the geocoded location
+                                const marker = new google.maps.Marker({
+                                    position: location,
+                                    map: map,
+                                    title: provider.name,
+                                });
 
-                const infoWindow = new google.maps.InfoWindow({
-                    content: `
+                                const infoWindow = new google.maps.InfoWindow({
+                                            content: `
                         <div>
                             <h3>${provider.name}</h3>
                             <p>${provider.address}</p>
@@ -105,7 +105,7 @@ function createServiceCard(service) {
     card.innerHTML = `
         <div class="row g-0">
             <div class="col-md-4">
-                <img src="${service.imageUrl || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
+                <img src="/static/images/${service.imageUrl || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
             </div>
             <div class="col-md-8">
                 <div class="card-body">

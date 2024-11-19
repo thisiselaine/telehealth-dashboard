@@ -43,7 +43,18 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <!-- Add any additional navbar items here if needed -->
+                    {{#if logged_in}}
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="#">Welcome, {{user_name}}!</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="/logout">Logout</a>
+                    </li>
+                    {{else}}
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="/login">Login</a>
+                    </li>
+                    {{/if}}
                 </ul>
             </div>
         </div>
