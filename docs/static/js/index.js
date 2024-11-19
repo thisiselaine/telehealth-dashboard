@@ -170,3 +170,13 @@ function initMap() {
         zoom: 12
     });
 }
+
+// // Function to listen to clicks on the logout link element ID
+// function setupLogoutListener() {
+//     document.getElementById('logout-link').addEventListener('click', function(event) {
+//         event.preventDefault();  // Prevent the default action (navigating to the href)
+//         document.getElementById('logout-form').submit();  // Submit the form
+//     });
+// }
+
+// setupLogoutListener();

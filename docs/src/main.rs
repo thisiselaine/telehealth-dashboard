@@ -9,6 +9,7 @@ use serde_json::json;
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use handlebars::Handlebars;
+use std::sync::Mutex;
 
 #[derive(Deserialize)]
 struct QueryParams {
@@ -19,6 +20,10 @@ struct QueryParams {
 struct LoginData {
     username: String,
     password: String,
+}
+
+struct AppState {
+    logout_flag: Mutex<bool>, // Tracks logout state
 }
 
 // Handler for the `/services` endpoint
@@ -88,10 +93,12 @@ async fn login_handler(
                 let cookie = CookieBuilder::new("username", username.clone())
                     .path("/")
                     .finish();
-                
-                return HttpResponse::Ok()
-                    .cookie(cookie)
-                    .body("Login successful");
+
+                // Redirect back to the index page
+                return HttpResponse::Found()
+                    .cookie(cookie) // Attach the cookie to the response
+                    .append_header(("Location", "/")) // Redirect to the index page
+                    .finish();
             } else {
                 HttpResponse::Unauthorized().body("Invalid credentials")
             }
@@ -161,27 +168,52 @@ async fn register(_req: HttpRequest) -> Result<NamedFile> {
 
 // Handler for the `/logout` endpoint
 #[post("/logout")]
-async fn logout(_req: HttpRequest) -> impl Responder {
-    // Clear the username cookie
+async fn logout(state: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
+    // Set the logout flag in the shared state
+    {
+        let mut logout_flag = state.logout_flag.lock().unwrap();
+        *logout_flag = true;
+    }
+
+    // Clear the username cookie by setting it to an empty value
     let cookie = Cookie::build("username", "")
         .path("/")
         .finish();
-
-    HttpResponse::Ok()
-        .cookie(cookie)
-        .body("Logged out")
+    
+    // Respond with a redirect to the index page
+    HttpResponse::Found()
+        .append_header(("Location", "/"))
+        .cookie(cookie) // Include the cleared cookie to remove the username
+        .finish()
 }
 
 // Serves the index page at /
-async fn index(req: HttpRequest, hb: web::Data<Handlebars<'_>>) -> impl Responder {
+// #[get("/")]
+async fn index(req: HttpRequest, hb: web::Data<Handlebars<'_>>, state: web::Data<AppState>) -> impl Responder {
     let username = req.cookie("username").map(|cookie| cookie.value().to_string());
 
     let mut data = serde_json::Map::new();
     if let Some(username) = username {
-        data.insert("username".to_string(), json!(username));
-        data.insert("logged_in".to_string(), json!(true));
+        if !username.is_empty() {
+            data.insert("username".to_string(), json!(username));
+            // Debug 
+            println!("User {} is logged in", username);
+
+            data.insert("logged_in".to_string(), json!(true));
+        } else {
+            data.insert("logged_in".to_string(), json!(false));
+        }
     } else {
         data.insert("logged_in".to_string(), json!(false));
+    }
+
+    // Check if the logout flag is set
+    {
+        let mut logout_flag = state.logout_flag.lock().unwrap();
+        if *logout_flag {
+            data.insert("logout_message".to_string(), json!("You have successfully logged out."));
+            *logout_flag = false; // Reset the flag after showing the message
+        }
     }
 
     let body = hb.render("index", &data).unwrap_or_else(|_| "Template error".to_string());
@@ -204,10 +236,16 @@ async fn main() -> std::io::Result<()> {
     handlebars.register_template_file("index", "./templates/index.hbs")
         .expect("Failed to register templates directory");
 
+    // Create the application state
+    let state = web::Data::new(AppState {
+        logout_flag: Mutex::new(false),
+    });
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(pool.clone())) // Share the database pool across handlers
             .app_data(web::Data::new(handlebars.clone())) // Share the handlebars instance
+            .app_data(state.clone()) // Share the application state
             .route("/api-key", web::get().to(api_key_handler)) // Endpoint to serve the API key
             .route("/services", web::get().to(services_handler)) // Endpoint for health services
             .route("/", web::get().to(index)) // Endpoint for index page
