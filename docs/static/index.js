@@ -1,6 +1,6 @@
 // Function to fetch health services based on zip code and display results
 async function fetchHealthServices(zip) {
-    const resultsDiv = document.getElementById('results');
+    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
     const headerDiv = document.getElementById('resultsHeader');
 
     try {
@@ -10,29 +10,38 @@ async function fetchHealthServices(zip) {
             throw new Error('Failed to fetch health services');
         }
 
-        const data = await response.json(); // Parse the JSON response
-        console.log(data);
-        const { coordinates, providers } = data;
-        clearResults(); // Clear previous results before displaying new ones
+        const data = await response.json();
+        console.log('API Response:', data);
 
+        const { coordinates, providers } = data;
+
+        // Clear previous results
+        clearResults();
+
+        // Update the map
         updateMap(coordinates, providers);
 
-        // Update the header with the number of results and the zip code
-        const resultCount = providers.length;
+        // Update the header
+        const resultCount = providers ? providers.length : 0;
         headerDiv.innerHTML = `${resultCount} results found for ZIP code ${zip}`;
 
-        // Display the health services
-        if (providers.length === 0) {
-            resultsDiv.innerHTML = '<p>No health services found.</p>';
-        } else {
-            providers.forEach(service => {
-                // Create and append Bootstrap card for each service
-                const card = createServiceCard(service);
-                resultsDiv.appendChild(card);
-            });
+        // Handle empty results
+        if (!providers || providers.length === 0) {
+            carouselInner.innerHTML = '<div class="carousel-item"><p>No health services found.</p></div>';
+            return;
         }
+
+        // Populate carousel with cards
+        providers.forEach((service) => {
+            // Use createServiceCard to generate the card
+            const card = createServiceCard(service);
+
+            // Append the card to the carousel-inner
+            carouselInner.appendChild(card);
+        });
     } catch (error) {
         console.error('Error fetching health services:', error);
+        headerDiv.innerHTML = '<p class="text-danger">Failed to load health services.</p>';
     }
 }
 
@@ -100,7 +109,7 @@ function updateMap(coordinates, providers) {
 // Function to create a Bootstrap card for a service
 function createServiceCard(service) {
     const card = document.createElement('div');
-    card.classList.add('card', 'mb-3'); // Bootstrap card classes
+    card.classList.add('card'); // Bootstrap card classes
 
     card.innerHTML = `
         <div class="row g-0">
@@ -111,6 +120,8 @@ function createServiceCard(service) {
                 <div class="card-body">
                     <h5 class="card-title">${service.name}</h5>
                     <p class="card-text">${service.address}</p>
+                    <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
+                    <p class="card-text">${service.rating ? `Rating: ${service.rating}` : ''}</p>
                 </div>
             </div>
         </div>
@@ -121,10 +132,10 @@ function createServiceCard(service) {
 
 // Function to clear the search results
 function clearResults() {
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = ''; // Clear all content in the results div
-    // Clear the text in the input field
-    document.getElementById('zip').value = '';
+    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
+    const headerDiv = document.getElementById('resultsHeader');
+    carouselInner.innerHTML = ''; // Clear carousel items
+    headerDiv.innerHTML = ''; // Clear the header text
 }
 
 // Event listener for the clear button
@@ -161,8 +172,6 @@ async function loadGoogleMaps() {
     }
 }
 
-loadGoogleMaps();
-
 
 function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
@@ -170,3 +179,26 @@ function initMap() {
         zoom: 12
     });
 }
+
+function populateCarousel(results) {
+    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
+    carouselInner.innerHTML = ''; // Clear previous results
+
+    results.forEach((result, index) => {
+        const carouselItem = document.createElement('div');
+        carouselItem.className = `carousel-item ${index === 0 ? 'active' : ''}`; // First item should be active
+        carouselItem.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">${result.name}</h5>
+                    <p class="card-text">${result.address}</p>
+                    <p class="card-text">${result.phone ? `Phone: ${result.phone}` : ''}</p>
+                    <p class="card-text">${result.rating ? `Rating: ${result.rating}` : ''}</p>
+                </div>
+            </div>
+        `;
+        carouselInner.appendChild(carouselItem);
+    });
+}
+
+loadGoogleMaps();
