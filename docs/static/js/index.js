@@ -2,12 +2,12 @@
 async function fetchHealthServices(location, serviceType, useCurLocation) {
     const headerDiv = document.getElementById('resultsHeader');
 
-    if(!serviceType){
+    if (!serviceType) {
         const serviceTypeDropdown = document.getElementById('serviceType');
         serviceTypeDropdown.classList.add('is-invalid');
         headerDiv.innerHTML = '<p class="text-danger">Please specify a service type.</p>';
         return;
-    }else{
+    } else {
         document.getElementById('serviceType').classList.remove('is-invalid');
     }
 
@@ -48,7 +48,7 @@ async function fetchHealthServices(location, serviceType, useCurLocation) {
     }
 }
 
-function populateCarousel(providers, markers){
+function populateCarousel(providers, markers) {
     const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
     const carouselDiv = document.getElementById('resultsCarousel');
     carouselDiv.hidden = false;
@@ -103,7 +103,7 @@ function updateMap(coordinates, providers, useCurLocation) {
         zoom: 12,
     });
 
-    if(useCurLocation){
+    if (useCurLocation) {
         showUserLocation(map, coordinates);
     }
 
@@ -113,34 +113,33 @@ function updateMap(coordinates, providers, useCurLocation) {
 
     // Wrap geocoding in promises to handle async operations
     const geocodePromises = providers.map((provider) => {
-        if (!provider.address) {
-            console.warn(`Skipping provider ${provider.name}: Missing address`);
-            return Promise.resolve(); // Resolve immediately for missing addresses
-        }
+                if (!provider.address) {
+                    console.warn(`Skipping provider ${provider.name}: Missing address`);
+                    return Promise.resolve(); // Resolve immediately for missing addresses
+                }
 
-        return new Promise((resolve) => {
-            geocoder.geocode({ address: provider.address }, (results, status) => {
-                if (status === 'OK' && results[0]) {
-                    const location = results[0].geometry.location;
+                return new Promise((resolve) => {
+                            geocoder.geocode({ address: provider.address }, (results, status) => {
+                                        if (status === 'OK' && results[0]) {
+                                            const location = results[0].geometry.location;
 
-                    // Create a marker
-                    const marker = new google.maps.Marker({
-                        position: location,
-                        map: map,
-                        title: provider.name,
-                    });
+                                            // Create a marker using the geocoded location
+                                            const marker = new google.maps.Marker({
+                                                position: location,
+                                                map: map,
+                                                title: provider.name,
+                                            });
 
-                    const infoWindow = new google.maps.InfoWindow({
-                        content: `
-                            <div>
-                                <h3>${provider.name}</h3>
-                                <img src="${provider.photo_url}" class="img-fluid rounded-start" style="max-width: 200px; height: auto;">
-                                <br><p>${provider.address}</p>
-                                <p>${provider.phone ? `Phone: ${provider.phone}` : ''}</p>
-                                <p>${provider.rating ? `Rating: ${provider.rating.toFixed(1)}` : ''}</p>
-                            </div>
-                        `,
-                    });
+                                            const infoWindow = new google.maps.InfoWindow({
+                                                        content: `
+                        <div>
+                            <h3>${provider.name}</h3>
+                            <p>${provider.address}</p>
+                            <p>${provider.phone ? `Phone: ${provider.phone}` : ''}</p>
+                            <p>${provider.rating ? `Rating: ${provider.rating}` : ''}</p>
+                        </div>
+                    `,
+                });
 
                     marker.addListener('click', () => {
                         if (currentInfoWindow) {
@@ -176,7 +175,7 @@ function createServiceCard(service) {
     card.innerHTML = `
         <div class="row g-0">
             <div class="col-md-4">
-                <img src="${service.photo_url || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
+                <img src="/static/images/${service.photo_url || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
             </div>
             <div class="col-md-8">
                 <div class="card-body">
@@ -303,3 +302,13 @@ function showUserLocation(map, userLocation) {
 
 loadGoogleMaps();
 let currentInfoWindow = null;
+
+// // Function to listen to clicks on the logout link element ID
+// function setupLogoutListener() {
+//     document.getElementById('logout-link').addEventListener('click', function(event) {
+//         event.preventDefault();  // Prevent the default action (navigating to the href)
+//         document.getElementById('logout-form').submit();  // Submit the form
+//     });
+// }
+
+// setupLogoutListener();
