@@ -12,6 +12,7 @@ struct QueryParams {
     zip: Option<String>,
     lat: Option<f64>,    // Optional latitude
     lng: Option<f64>,    // Optional longitude
+    service_type: Option<String>,
 }
 
 // Handler for the `/services` endpoint
@@ -21,7 +22,6 @@ async fn services_handler(query: web::Query<QueryParams>) -> impl Responder {
 
     let coordinates = if let (Some(lat), Some(lng)) = (query.lat, query.lng) {
         // Use lat/lng if provided
-        // println!("Using provided latitude and longitude: {}, {}", lat, lng);
         Coordinates { lat, lng }
     } else if let Some(zip) = query.zip.as_deref() {
         // Geocode the ZIP code if lat/lng not provided
@@ -37,7 +37,10 @@ async fn services_handler(query: web::Query<QueryParams>) -> impl Responder {
         return HttpResponse::BadRequest().body("Please provide either a ZIP code or lat/lng");
     };
 
-    let providers = match find_health_providers(&coordinates, 10000, &api_key).await {
+    // Default to a generic service type if none is specified
+    let service_type = query.service_type.as_deref().unwrap_or("hospital");
+
+    let providers = match find_health_providers(&coordinates, 10000, &api_key, service_type).await {
         Ok(providers) => providers,
         Err(err) => {
             eprintln!("Failed to find health providers: {}", err);

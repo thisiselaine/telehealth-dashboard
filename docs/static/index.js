@@ -1,15 +1,13 @@
 // Function to fetch health services based on zip code and display results
-async function fetchHealthServices(location, useCurLocation) {
-    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
+async function fetchHealthServices(location, serviceType, useCurLocation) {
     const headerDiv = document.getElementById('resultsHeader');
-    const carouselDiv = document.getElementById('resultsCarousel');
 
     try {
         let response = null;
-        if(!useCurLocation){
-            response = await fetch(`/services?zip=${location}`);
-        }else{
-            response = await fetch(`/services?lat=${location.lat}&lng=${location.lng}`);
+        if (!useCurLocation) {
+            response = await fetch(`/services?zip=${location}&service_type=${serviceType}`);
+        } else {
+            response = await fetch(`/services?lat=${location.lat}&lng=${location.lng}&service_type=${serviceType}`);
         }
         if (!response.ok) {
             throw new Error('Failed to fetch health services');
@@ -18,17 +16,15 @@ async function fetchHealthServices(location, useCurLocation) {
         const data = await response.json();
         const { coordinates, providers } = data;
 
-        clearResults();
-        carouselDiv.hidden = false;
-
         // Update the map and get markers
+        clearResults();
         const markers = await updateMap(coordinates, providers, useCurLocation);
 
         const resultCount = providers ? providers.length : 0;
-        
-        if(useCurLocation){
+
+        if (useCurLocation) {
             headerDiv.innerHTML = `${resultCount} results found at current location`;
-        }else{
+        } else {
             headerDiv.innerHTML = `${resultCount} results found for ZIP code ${location}`;
         }
 
@@ -37,34 +33,49 @@ async function fetchHealthServices(location, useCurLocation) {
             return;
         }
 
-        // Populate carousel and link cards to markers
-        providers.forEach((service) => {
-            const card = createServiceCard(service);
-
-            // Find the corresponding marker
-            console.log(typeof(markers));
-            const markerEntry = markers.find(({ provider }) => provider.name === service.name && provider.address === service.address);
-
-            if (markerEntry) {
-                card.addEventListener('click', () => {
-                    // Close all open InfoWindows
-                    markers.forEach(({ infoWindow }) => infoWindow.close());
-
-                    // Open the corresponding InfoWindow
-                    markerEntry.infoWindow.open(markerEntry.marker.getMap(), markerEntry.marker);
-                    currentInfoWindow = markerEntry.infoWindow;
-
-                    // Pan to the marker's position
-                    markerEntry.marker.getMap().panTo(markerEntry.marker.getPosition());
-                });
-            }
-
-            carouselInner.appendChild(card);
-        });
+        populateCarousel(providers, markers);
     } catch (error) {
         console.error('Error fetching health services:', error);
         headerDiv.innerHTML = '<p class="text-danger">Failed to load health services.</p>';
     }
+}
+
+function populateCarousel(providers, markers){
+    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
+    const carouselDiv = document.getElementById('resultsCarousel');
+    carouselDiv.hidden = false;
+
+    // Sort providers by rating (descending order)
+    providers.sort((a, b) => {
+        // Handle cases where ratings are missing
+        const ratingA = a.rating || 0;
+        const ratingB = b.rating || 0;
+        return ratingB - ratingA;
+    });
+
+    // Populate carousel and link cards to markers
+    providers.forEach((service) => {
+        const card = createServiceCard(service);
+
+        // Find the corresponding marker
+        const markerEntry = markers.find(({ provider }) => provider.name === service.name && provider.address === service.address);
+
+        if (markerEntry) {
+            card.addEventListener('click', () => {
+                // Close all open InfoWindows
+                markers.forEach(({ infoWindow }) => infoWindow.close());
+
+                // Open the corresponding InfoWindow
+                markerEntry.infoWindow.open(markerEntry.marker.getMap(), markerEntry.marker);
+                currentInfoWindow = markerEntry.infoWindow;
+
+                // Pan to the marker's position
+                markerEntry.marker.getMap().panTo(markerEntry.marker.getPosition());
+            });
+        }
+
+        carouselInner.appendChild(card);
+    });
 }
 
 
@@ -148,10 +159,6 @@ function updateMap(coordinates, providers, useCurLocation) {
     });
 }
 
-
-
-
-
 // Function to create a Bootstrap card for a service
 function createServiceCard(service) {
     const card = document.createElement('div');
@@ -160,14 +167,14 @@ function createServiceCard(service) {
     card.innerHTML = `
         <div class="row g-0">
             <div class="col-md-4">
-                <img src="${service.imageUrl || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
+                <img src="${service.photo_url || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
             </div>
             <div class="col-md-8">
                 <div class="card-body">
                     <h5 class="card-title">${service.name}</h5>
                     <p class="card-text">${service.address}</p>
                     <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
-                    <p class="card-text">${service.rating ? `Rating: ${service.rating}` : ''}</p>
+                    <p class = ""card-text>${service.rating ? `Rating: ${service.rating.toFixed(1)}` : ''}</p>
                 </div>
             </div>
         </div>
@@ -199,22 +206,24 @@ document.getElementById('zipForm').addEventListener('submit', function(e) {
     e.preventDefault(); // Prevent form from reloading the page
 
     const zip = document.getElementById('zip').value; // Get the zip code from the input
-    fetchHealthServices(zip, false); // Call the fetchHealthServices function with the zip code
+    const serviceType = document.getElementById('serviceType').value;
+    fetchHealthServices(zip, serviceType, false); // Call the fetchHealthServices function with the zip code
 });
 
 // Event listener for the form submission
 document.getElementById('searchBtn').addEventListener('click', function(e) {
     e.preventDefault(); // Prevent form from reloading the page
-
+    const serviceType = document.getElementById('serviceType').value;
     const zip = document.getElementById('zip').value; // Get the zip code from the input
-    fetchHealthServices(zip, false); // Call the fetchHealthServices function with the zip code
+    fetchHealthServices(zip, serviceType, false); // Call the fetchHealthServices function with the zip code
 });
 
 document.getElementById('locationBtn').addEventListener('click', async function(e) {
     e.preventDefault(); // Prevent form from reloading the page
 
     userLocation = await getUserLocation();
-    fetchHealthServices(userLocation, true); // Call the fetchHealthServices function with the zip code
+    const serviceType = document.getElementById('serviceType').value;
+    fetchHealthServices(userLocation, serviceType, true); // Call the fetchHealthServices function with the zip code
 });
 
 let map;
@@ -242,27 +251,6 @@ function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
         center: { lat: 37.7749, lng: -122.4194 },
         zoom: 12
-    });
-}
-
-function populateCarousel(results) {
-    const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
-    carouselInner.innerHTML = ''; // Clear previous results
-
-    results.forEach((result, index) => {
-        const carouselItem = document.createElement('div');
-        carouselItem.className = `carousel-item ${index === 0 ? 'active' : ''}`; // First item should be active
-        carouselItem.innerHTML = `
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">${result.name}</h5>
-                    <p class="card-text">${result.address}</p>
-                    <p class="card-text">${result.phone ? `Phone: ${result.phone}` : ''}</p>
-                    <p class="card-text">${result.rating ? `Rating: ${result.rating}` : ''}</p>
-                </div>
-            </div>
-        `;
-        carouselInner.appendChild(carouselItem);
     });
 }
 

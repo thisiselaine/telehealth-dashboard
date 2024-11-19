@@ -85,12 +85,22 @@
         <form id="zipForm" class="d-flex mb-3">
             <div class="input-group">
                 <input type="text" class="form-control" id="zip" name="zip" placeholder="Enter your ZIP code" aria-label="zip" aria-describedby="basic-addon2" required>
-                <button type="button" id="locationBtn" class="btn btn-outline-success">
-                    Use My Location <i class="fa-solid fa-location-dot"></i>
-                </button>
                 <button type="button" id="searchBtn" class="btn btn-outline-primary">
                     Search <i class="fa-solid fa-magnifying-glass"></i>
                 </button>
+                <button type="button" id="locationBtn" class="btn btn-outline-success">
+                    Use My Location <i class="fa-solid fa-location-dot"></i>
+                </button>
+                <select id="serviceType" class="form-select" style="max-width: 200px; margin-right: 10px;">
+                    <option value="" selected disabled>Service Type</option>
+                    <option value="dentist">Dentist</option>
+                    <option value="drugstore">Drugstore</option>
+                    <option value="pharmacy">Pharmacy</option>
+                    <option value="physiotherapist">Physical Therapy</option>
+                    <option value="hospital">Hospital</option>
+                    <option value="doctor">Doctor</option>
+                    <option value="health">Health</option>
+                </select>
                 <button type="button" id="clearBtn" class="btn btn-outline-secondary">
                     Clear <i class="fa-solid fa-xmark"></i>
                 </button>
