@@ -198,6 +198,7 @@ function createServiceCard(service) {
     const uniqueId = `services-${generateUniqueId()}`;
 
     card.innerHTML = `
+    <div class="position-relative">
         <div class="row g-0 align-items-center">
             <div class="col-md-4">
                 <img src="${service.photo_url || '/static/images/default_image.png'}" 
@@ -220,7 +221,7 @@ function createServiceCard(service) {
                                 </button>`
                             : ''
                     }
-                    <div id="${uniqueId}" class="collapse mt-3">
+                    <div id="${uniqueId}" class="collapse mt-3" style="padding-bottom: 30px;">
                         <div class="services-content">
                             <ul class="list-group">
                                 ${service.services.map((s) => `
@@ -236,7 +237,13 @@ function createServiceCard(service) {
                 </div>
             </div>
         </div>
-    `;
+        <span class="badge position-absolute ${service.open_now ? 'bg-success' : 'bg-danger'}" 
+              style="bottom: 10px; right: 10px;">
+            ${service.open_now ? 'Open Now' : 'Closed Now'}
+        </span>
+    </div>
+`;
+
     return card;
 }
 
