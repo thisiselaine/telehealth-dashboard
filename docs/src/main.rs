@@ -14,7 +14,10 @@ use std::sync::Mutex;
 
 #[derive(Deserialize)]
 struct QueryParams {
-    zip: String,
+    zip: Option<String>,
+    lat: Option<f64>,    // Optional latitude
+    lng: Option<f64>,    // Optional longitude
+    service_type: Option<String>,
 }
 
 #[derive(Deserialize)]
