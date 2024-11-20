@@ -175,7 +175,7 @@ function createServiceCard(service) {
     card.innerHTML = `
         <div class="row g-0">
             <div class="col-md-4">
-                <img src="${service.photo_url || 'default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
+                <img src="${service.photo_url || '/static/images/default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
             </div>
             <div class="col-md-8">
                 <div class="card-body">
