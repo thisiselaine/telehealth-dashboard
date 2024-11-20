@@ -6,11 +6,12 @@ use actix_web::{get, post, web, App, HttpServer, HttpRequest, Responder, HttpRes
 use actix_web::cookie::{Cookie, CookieBuilder};
 use actix_files::NamedFile;
 use serde_json::json;
-use serde::{Deserialize};
+use serde::{Deserialize, Serialize};
 
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool};
 use handlebars::Handlebars;
 use std::sync::Mutex;
+use std::borrow::Cow;
 
 #[derive(Deserialize)]
 struct QueryParams {
@@ -24,6 +25,15 @@ struct QueryParams {
 struct LoginData {
     username: String,
     password: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct FavoriteService {
+    photo: String,
+    name: String,
+    address: String,
+    phone: String,
+    rating: String,
 }
 
 struct AppState {
@@ -76,6 +86,49 @@ async fn api_key_handler() -> impl Responder {
     HttpResponse::Ok().body(api_key)
 }
 
+// #[post("/favorites")]
+async fn save_favorites(req: HttpRequest, favorite: web::Json<FavoriteService>, pool: web::Data<SqlitePool>, cookies: web::Data<actix_web::cookie::CookieJar>,) -> impl Responder {
+    // Log the received favorite service data
+    println!("Received favorite: {:?}", favorite);
+    println!("Hello!");
+
+    let user_id = cookies.get("user_id").map(|cookie| cookie.value().to_string()).unwrap_or_else(|| "".to_string());
+    if user_id.is_empty() {
+        return HttpResponse::Unauthorized().body("User not logged in");
+    }
+
+    // Insert the favorite service into the database
+    match insert_favorite(&pool, &favorite, user_id).await {
+        Ok(_) => {
+            println!("Favorite saved successfully.");
+            HttpResponse::Ok().body("Favorite saved")
+        }
+        Err(e) => {
+            println!("Error: {:?}", e);
+            HttpResponse::InternalServerError().body("Failed to save favorite")
+        }
+    }
+}
+
+// Inserts a favorite service into the database
+async fn insert_favorite(pool: &SqlitePool, favorite: &FavoriteService, user_id: String) -> Result<(), sqlx::Error> {
+    println!("Inserting favorite into database...");
+
+    sqlx::query!(
+        "INSERT INTO favorites (user_id, photo, title, address, phone, rating) VALUES ($1, $2, $3, $4, $5, $6)",
+        user_id,
+        favorite.photo,
+        favorite.name,
+        favorite.address,
+        favorite.phone,
+        favorite.rating
+    )
+    .execute(pool)
+    .await?;
+
+    println!("Favorite saved successfully.");
+    Ok(())
+}
 
 // Handler for the `/login` endpoint
 #[post("/login")]
@@ -100,13 +153,19 @@ async fn login_handler(
 
             if is_valid {
                 // Set a cookie with the username on successful login
-                let cookie = CookieBuilder::new("username", username.clone())
+                let username_cookie = CookieBuilder::new("username", username.clone())
+                    .path("/")
+                    .finish();
+
+                // Set a cookie with the user ID on successful login
+                let user_id_cookie = CookieBuilder::new("user_id", Cow::from(user.id.unwrap().to_string()))
                     .path("/")
                     .finish();
 
                 // Redirect back to the index page
                 return HttpResponse::Found()
-                    .cookie(cookie) // Attach the cookie to the response
+                    .cookie(username_cookie) // Attach the cookie to the response
+                    .cookie(user_id_cookie) // Attach the user ID cookie to the response
                     .append_header(("Location", "/")) // Redirect to the index page
                     .finish();
             } else {
@@ -188,7 +247,7 @@ async fn register(req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::
 
 // Serves the profile page at /profile
 // #[get("/profile")]
-async fn profile(req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+async fn profile(hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
     let data = serde_json::Map::new();
     let body = hb.render("profile", &data).unwrap_or_else(|_| "Template error".to_string());
     HttpResponse::Ok().body(body)
@@ -207,11 +266,17 @@ async fn logout(state: web::Data<AppState>, _req: HttpRequest) -> impl Responder
     let cookie = Cookie::build("username", "")
         .path("/")
         .finish();
+
+    // Clear the user ID cookie by setting it to an empty value
+    let user_id_cookie = Cookie::build("user_id", "")
+        .path("/")
+        .finish();
     
     // Respond with a redirect to the index page
     HttpResponse::Found()
         .append_header(("Location", "/"))
         .cookie(cookie) // Include the cleared cookie to remove the username
+        .cookie(user_id_cookie) // Include the cleared user ID cookie
         .finish()
 }
 
@@ -282,6 +347,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(index)) // Endpoint for index page
             .route("/profile", web::get().to(profile)) // Endpoint for profile page
             .route("/register", web::get().to(register)) // Endpoint for register page
+            .route("/favorites", web::post().to(save_favorites)) // Endpoint for saving favorites
             .service(login) // Endpoint for login page
             .service(login_handler) // Endpoint for login form submission
             .service(register_handler) // Endpoint for register form submission

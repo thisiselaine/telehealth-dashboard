@@ -80,12 +80,63 @@ function populateCarousel(providers, markers) {
                 // Pan to the marker's position
                 markerEntry.marker.getMap().panTo(markerEntry.marker.getPosition());
             });
+
+            const starButton = card.querySelector('.star-button');
+            starButton.addEventListener('click', function() {
+                const starIcon = starButton.querySelector('.star-icon');
+                // If the star icon is solid, change it to regular (unfavorited)
+                if (starIcon.classList.contains('fas')) {
+                    starIcon.classList.remove('fas');
+                    starIcon.classList.add('far');
+                }
+                // If the star icon is regular, change it to solid (favorited)
+                else {
+                    starIcon.classList.remove('far');
+                    starIcon.classList.add('fas');
+
+                    // Get the service details from the star button's data attributes
+                    const photo = starButton.getAttribute('data-photo');
+                    const name = starButton.getAttribute('data-name');
+                    const address = starButton.getAttribute('data-address');
+                    const phone = starButton.getAttribute('data-phone');
+                    const rating = starButton.getAttribute('data-rating');
+                    console.log(photo, name, address, phone, rating);
+
+                    // Send a POST request to the server to save the favorites
+                    saveFavorites(photo, name, address, phone, rating);
+                }
+            });
         }
 
         carouselInner.appendChild(card);
     });
 }
 
+// Function to save favorites
+function saveFavorites(photo, name, address, phone, rating) {
+    fetch('/favorites', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ photo, name, address, phone, rating }),
+    })
+
+    .then((response) => {
+            if (!response.ok) {
+                console.log('DEBUG - Favorite saved:', response);
+                throw new Error('Failed to save favorite');
+            }
+            return response.json();
+        })
+        .then((data) => {
+            console.log('Favorite saved:', data);
+        })
+        .catch((error) => {
+            console.error('Error saving favorite:', error);
+            alert('Failed to save favorite. Please try again.');
+        });
+}
 
 
 function updateMap(coordinates, providers, useCurLocation) {
@@ -182,7 +233,15 @@ function createServiceCard(service) {
                     <h5 class="card-title">${service.name}</h5>
                     <p class="card-text">${service.address}</p>
                     <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
-                    <p class = ""card-text>${service.rating ? `Rating: ${service.rating.toFixed(1)}` : ''}</p>
+                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : ''}</p>
+                    <a class="btn btn-primary star-button"
+                    data-photo="${service.photo_url || '/static/images/default_image.png'}"
+                    data-name="${service.name}" 
+                    data-address="${service.address}" 
+                    data-phone="${service.phone || ''}" 
+                    data-rating="${service.rating || ''}">
+                    <i class="far fa-star star-icon"></i>
+                    </a>
                 </div>
             </div>
         </div>
@@ -232,6 +291,7 @@ document.getElementById('locationBtn').addEventListener('click', async function(
     userLocation = await getUserLocation();
     const serviceType = document.getElementById('serviceType').value;
     fetchHealthServices(userLocation, serviceType, true); // Call the fetchHealthServices function with the zip code
+    favoriteCard();
 });
 
 let map;
