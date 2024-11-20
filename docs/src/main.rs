@@ -14,7 +14,10 @@ use std::sync::Mutex;
 
 #[derive(Deserialize)]
 struct QueryParams {
-    zip: String,
+    zip: Option<String>,
+    lat: Option<f64>, // Optional latitude
+    lng: Option<f64>, // Optional longitude
+    service_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -173,6 +176,14 @@ async fn register(_req: HttpRequest) -> Result<NamedFile> {
     })
 }
 
+// Serves the profile page at /profile
+#[get("/profile")]
+async fn profile(_req: HttpRequest) -> Result<NamedFile> {
+    NamedFile::open_async("./templates/profile.hbs").await.map_err(|e| {
+        actix_web::error::ErrorInternalServerError(format!("File open error: {}", e))
+    })
+}
+
 // Handler for the `/logout` endpoint
 #[post("/logout")]
 async fn logout(state: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
@@ -241,7 +252,10 @@ async fn main() -> std::io::Result<()> {
     // Initialize handlebars template engine
     let mut handlebars = Handlebars::new();
     handlebars.register_template_file("index", "./templates/index.hbs")
-        .expect("Failed to register templates directory");
+        .expect("Failed to register index");
+
+    handlebars.register_template_file("profile", "./templates/profile.hbs")
+        .expect("Failed to register templates index");
 
     // Create the application state
     let state = web::Data::new(AppState {
@@ -261,6 +275,7 @@ async fn main() -> std::io::Result<()> {
             .service(login_handler) // Endpoint for login form submission
             .service(register_handler) // Endpoint for register form submission
             .service(logout) // Endpoint for logout
+            .service(profile) // Endpoint for profile
             .service(fs::Files::new("/static", "./static").show_files_listing()) // Serve static files under /static
             
     })
