@@ -160,28 +160,38 @@ async fn register_handler(
             .await;
 
             match result {
-                Ok(res) if res.rows_affected() == 1 => HttpResponse::Created().body("User created"),
-                _ => HttpResponse::InternalServerError().body("Failed to create user"),
+                Ok(res) if res.rows_affected() == 1 => {
+                    // Redirect to the /register page with a success message
+                    let success_message = format!("Success!");
+                    return HttpResponse::Found()
+                        .header("Location", format!("/register?success={}", success_message))
+                        .finish();
+                }
+                _ => HttpResponse::InternalServerError().body("Failed to register user"),
             }
         }
         Err(_) => HttpResponse::InternalServerError().body("Database error"),
     }
 }
-
 // Serves the register page at /register
-#[get("/register")]
-async fn register(_req: HttpRequest) -> Result<NamedFile> {
-    NamedFile::open_async("./static/register.html").await.map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("File open error: {}", e))
-    })
+// #[get("/register")]
+async fn register(req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+    let success_message = req.query_string();
+    let mut data = serde_json::Map::new();
+
+    if !success_message.is_empty() {
+        data.insert("success".to_string(), json!(success_message));
+    }
+    let body = hb.render("register",&data).unwrap_or_else(|_| "Template error".to_string());
+    HttpResponse::Ok().body(body)
 }
 
 // Serves the profile page at /profile
-#[get("/profile")]
-async fn profile(_req: HttpRequest) -> Result<NamedFile> {
-    NamedFile::open_async("./templates/profile.hbs").await.map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("File open error: {}", e))
-    })
+// #[get("/profile")]
+async fn profile(req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+    let data = serde_json::Map::new();
+    let body = hb.render("profile", &data).unwrap_or_else(|_| "Template error".to_string());
+    HttpResponse::Ok().body(body)
 }
 
 // Handler for the `/logout` endpoint
@@ -214,9 +224,6 @@ async fn index(req: HttpRequest, hb: web::Data<Handlebars<'_>>, state: web::Data
     if let Some(username) = username {
         if !username.is_empty() {
             data.insert("username".to_string(), json!(username));
-            // Debug 
-            println!("User {} is logged in", username);
-
             data.insert("logged_in".to_string(), json!(true));
         } else {
             data.insert("logged_in".to_string(), json!(false));
@@ -255,7 +262,10 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to register index");
 
     handlebars.register_template_file("profile", "./templates/profile.hbs")
-        .expect("Failed to register templates index");
+        .expect("Failed to register profile");
+
+    handlebars.register_template_file("register", "./templates/register.hbs")
+        .expect("Failed to register register");
 
     // Create the application state
     let state = web::Data::new(AppState {
@@ -270,12 +280,12 @@ async fn main() -> std::io::Result<()> {
             .route("/api-key", web::get().to(api_key_handler)) // Endpoint to serve the API key
             .route("/services", web::get().to(services_handler)) // Endpoint for health services
             .route("/", web::get().to(index)) // Endpoint for index page
+            .route("/profile", web::get().to(profile)) // Endpoint for profile page
+            .route("/register", web::get().to(register)) // Endpoint for register page
             .service(login) // Endpoint for login page
-            .service(register) // Endpoint for register page
             .service(login_handler) // Endpoint for login form submission
             .service(register_handler) // Endpoint for register form submission
             .service(logout) // Endpoint for logout
-            .service(profile) // Endpoint for profile
             .service(fs::Files::new("/static", "./static").show_files_listing()) // Serve static files under /static
             
     })
