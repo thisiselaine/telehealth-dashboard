@@ -3,6 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct Service {
+    pub name: String,
+    pub npi: String,
+    pub taxonomy: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HealthProvider {
     name: String,
     address: String,
@@ -11,6 +18,8 @@ pub struct HealthProvider {
     phone: Option<String>,
     rating: Option<f32>,
     photo_url: Option<String>,
+    open_now: bool,
+    services: Vec<Service>, 
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,9 +85,26 @@ pub async fn find_health_providers(
                     )
                 });
 
+            // Fetch additional info from NPI Registry API
+            let address = result["vicinity"].as_str().unwrap_or("");
+            // let name = result["name"].as_str().unwrap_or("").to_string();
+            let npi_data = fetch_npi_data(&address).await?;
+            let services = parse_npi_data(&npi_data); // Parse NPI data into services array
+
+            let photo_url = result["photos"]
+                .as_array()
+                .and_then(|photos| photos.get(0))
+                .and_then(|photo| photo["photo_reference"].as_str())
+                .map(|photo_reference| {
+                    format!(
+                        "https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={}&key={}",
+                        photo_reference, api_key
+                    )
+                });
+
             let provider = HealthProvider {
                 name: result["name"].as_str().unwrap_or("").to_string(),
-                address: result["vicinity"].as_str().unwrap_or("").to_string(),
+                address: address.to_string(),
                 distance: calculate_distance(
                     coordinates,
                     result["geometry"]["location"]["lat"].as_f64().unwrap(),
@@ -90,6 +116,8 @@ pub async fn find_health_providers(
                     .map(String::from),
                 rating: result["rating"].as_f64().map(|r| r as f32),
                 photo_url,
+                open_now: result["opening_hours"]["open_now"].as_bool().unwrap_or(false),
+                services: services, // Include parsed services
             };
             providers.push(provider);
         }
@@ -111,4 +139,41 @@ fn calculate_distance(coords: &Coordinates, lat2: f64, lng2: f64) -> f64 {
     let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
 
     EARTH_RADIUS * c
+}
+
+async fn fetch_npi_data(address: &str) -> Result<serde_json::Value, Box<dyn Error>> {
+    let npi_url = format!(
+        "https://clinicaltables.nlm.nih.gov/api/npi_org/v3/search?terms={}",
+        address
+    );
+
+    let response: serde_json::Value = reqwest::Client::new()
+        .get(&npi_url)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    // Process NPI data as needed (returning raw JSON here for demonstration)
+    Ok(response)
+}
+
+fn parse_npi_data(npi_data: &serde_json::Value) -> Vec<Service> {
+    let mut services = Vec::new();
+
+    if let Some(results) = npi_data.get(3).and_then(|data| data.as_array()) {
+        for result in results {
+            if let Some(service_data) = result.as_array() {
+                if service_data.len() >= 4 {
+                    services.push(Service {
+                        name: service_data[0].as_str().unwrap_or("").to_string(),
+                        npi: service_data[1].as_str().unwrap_or("").to_string(),
+                        taxonomy: service_data[2].as_str().unwrap_or("").to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    services
 }

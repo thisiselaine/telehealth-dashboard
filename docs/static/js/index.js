@@ -25,6 +25,10 @@ async function fetchHealthServices(location, serviceType, useCurLocation) {
         const data = await response.json();
         const { coordinates, providers } = data;
 
+        providers.forEach(provider => {
+            provider.services = provider.services || []; // Ensure services is an array
+        });
+
         // Update the map and get markers
         clearResults();
         const markers = await updateMap(coordinates, providers, useCurLocation);
@@ -63,6 +67,7 @@ function populateCarousel(providers, markers) {
 
     // Populate carousel and link cards to markers
     providers.forEach((service) => {
+        console.log(service);
         const card = createServiceCard(service);
 
         // Find the corresponding marker
@@ -207,9 +212,15 @@ function updateMap(coordinates, providers, useCurLocation) {
                                                         content: `
                         <div>
                             <h3>${provider.name}</h3>
+                            <img src="${provider.photo_url}" style="max-height: 150px; width: auto;" class="img-fluid rounded-start""><br><br>
                             <p>${provider.address}</p>
                             <p>${provider.phone ? `Phone: ${provider.phone}` : ''}</p>
-                            <p>${provider.rating ? `Rating: ${provider.rating}` : ''}</p>
+                            <p>${provider.rating ? `Rating: ${provider.rating.toFixed(1)}` : 'No ratings'}</p>
+                            <div class="mt-3">
+                                <span class="badge ${provider.open_now ? 'bg-success' : 'bg-danger'}">
+                                    ${provider.open_now ? 'Open Now' : 'Closed Now'}
+                                </span>
+                            </div>
                         </div>
                     `,
                 });
@@ -235,20 +246,38 @@ function updateMap(coordinates, providers, useCurLocation) {
 
     // Wait for all geocoding tasks to complete
     return Promise.all(geocodePromises).then(() => {
-        console.log('All geocoding completed. Markers:', markers);
+        // console.log('All geocoding completed. Markers:', markers);
         return markers; // Return the fully populated markers array
     });
+}
+
+const usedIds = new Set(); // Keep track of already-used IDs
+
+function generateUniqueId() {
+    let id;
+    do {
+        // Generate a random number between 1 and 1,000,000 (or any range you want)
+        id = Math.floor(Math.random() * 1000000) + 1;
+    } while (usedIds.has(id)); // Ensure the ID hasn't been used yet
+
+    usedIds.add(id); // Store the generated ID
+    return id.toString(); // Return as a string if needed
 }
 
 // Function to create a Bootstrap card for a service
 function createServiceCard(service) {
     const card = document.createElement('div');
     card.classList.add('card'); // Bootstrap card classes
+    const uniqueId = `services-${generateUniqueId()}`;
 
     card.innerHTML = `
-        <div class="row g-0">
+    <div class="position-relative">
+        <div class="row g-0 align-items-center">
             <div class="col-md-4">
-                <img src="${service.photo_url || '/static/images/default_image.png'}" class="img-fluid rounded-start" alt="${service.name}">
+                <img src="${service.photo_url || '/static/images/default_image.png'}" 
+                    class="img-fluid rounded-start" 
+                    style="max-height: 150px; width: 100%; object-fit: cover;" 
+                    alt="${service.name}">
             </div>
             <div class="col-md-8">
                 <div class="card-body">
@@ -263,13 +292,42 @@ function createServiceCard(service) {
                     data-rating="${service.rating || ''}">
                     <i class="far fa-star star-icon"></i>
                     </a>
+                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : 'No ratings'}</p>
+                    ${
+                        service.services && service.services.length > 0
+                            ? `<button class="btn btn-primary toggle-services" data-bs-toggle="collapse" 
+                                    data-bs-target="#${uniqueId}" aria-expanded="false" 
+                                    aria-controls="${uniqueId}">
+                                    Show Services
+                                </button>`
+                            : ''
+                    }
+                    <div id="${uniqueId}" class="collapse mt-3" style="padding-bottom: 30px;">
+                        <div class="services-content">
+                            <ul class="list-group">
+                                ${service.services.map((s) => `
+                                    <li class="list-group-item">
+                                        <strong>${s.name}</strong><br>
+                                        <em>${s.taxonomy}</em><br>
+                                        <span>NPI ID: ${s.npi}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    `;
+        <span class="badge position-absolute ${service.open_now ? 'bg-success' : 'bg-danger'}" 
+              style="bottom: 10px; right: 10px;">
+            ${service.open_now ? 'Open Now' : 'Closed Now'}
+        </span>
+    </div>
+`;
 
     return card;
 }
+
 
 // Function to clear the search results
 function clearResults() {
@@ -314,6 +372,58 @@ document.getElementById('locationBtn').addEventListener('click', async function(
     fetchHealthServices(userLocation, serviceType, true); // Call the fetchHealthServices function with the zip code
     favoriteCard();
 });
+
+document.addEventListener('click', function (event) {
+    // Check if the clicked element is a "Show Services" or "Hide Services" button
+    if (event.target.matches('.toggle-services')) {
+        event.preventDefault();
+
+        // Find the collapse target from the button's `data-bs-target` attribute
+        const collapseTargetId = event.target.getAttribute('data-bs-target');
+        const collapseTarget = document.querySelector(collapseTargetId);
+
+        if (collapseTarget) {
+            // Toggle visibility using the Bootstrap Collapse API
+            const bootstrapCollapse = bootstrap.Collapse.getInstance(collapseTarget) || new bootstrap.Collapse(collapseTarget, { toggle: false });
+
+            // Check if the collapse section is currently shown or hidden
+            if (collapseTarget.classList.contains('show')) {
+                // If currently shown, hide it
+                bootstrapCollapse.hide();
+            } else {
+                // If currently hidden, show it
+                bootstrapCollapse.show();
+
+                // Scroll to the card smoothly
+                const card = event.target.closest('.card');
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }
+    }
+});
+
+// Update button state based on collapse events
+document.addEventListener('shown.bs.collapse', function (event) {
+    const button = document.querySelector(`[data-bs-target="#${event.target.id}"]`);
+    if (button) {
+        button.textContent = 'Hide Services';
+        button.classList.remove('btn-primary');
+        button.classList.add('btn-danger');
+    }
+});
+
+document.addEventListener('hidden.bs.collapse', function (event) {
+    const button = document.querySelector(`[data-bs-target="#${event.target.id}"]`);
+    if (button) {
+        button.textContent = 'Show Services';
+        button.classList.remove('btn-danger');
+        button.classList.add('btn-primary');
+    }
+});
+
+
 
 let map;
 
@@ -383,6 +493,8 @@ function showUserLocation(map, userLocation) {
 
 loadGoogleMaps();
 let currentInfoWindow = null;
+
+
 
 // // Function to listen to clicks on the logout link element ID
 // function setupLogoutListener() {
