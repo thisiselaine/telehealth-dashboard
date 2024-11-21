@@ -236,6 +236,7 @@ async fn login(hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> im
 async fn register_handler(
     form: web::Form<LoginData>,
     pool: web::Data<SqlitePool>,
+    hb: web::Data<Handlebars<'_>>,
 ) -> impl Responder {
     let LoginData { username, password } = form.into_inner();
 
@@ -252,7 +253,11 @@ async fn register_handler(
     // Handle the result
     match existing_user {
         Ok(Some(_)) => {
-            return HttpResponse::Conflict().body("Username already exists");
+            // Redirect to the /register page with a conflict message using handlebars
+            let mut data = serde_json::Map::new();
+            data.insert("error_username_exists".to_string(), json!("Username already exists. Please choose another."));
+            let body = hb.render("register", &data).unwrap_or_else(|_| "Template error".to_string());
+            return HttpResponse::Ok().body(body);
         }
         Ok(None) => {
             // Insert the new user into the database
@@ -266,27 +271,35 @@ async fn register_handler(
 
             match result {
                 Ok(res) if res.rows_affected() == 1 => {
-                    // Redirect to the /register page with a success message
-                    let success_message = format!("Success!");
-                    return HttpResponse::Found()
-                        .header("Location", format!("/register?success={}", success_message))
-                        .finish();
+                    // Redirect to the /register page with a success messaage using handlebars
+                    let mut data = serde_json::Map::new();
+                    data.insert("success".to_string(), json!("User registered successfully. Please log in."));
+                    let body = hb.render("register", &data).unwrap_or_else(|_| "Template error".to_string());
+                    return HttpResponse::Ok().body(body);
                 }
-                _ => HttpResponse::InternalServerError().body("Failed to register user"),
+                _ => {
+                    // If failed to register user, reroute to register page with handlebars message
+                    let mut data = serde_json::Map::new();
+                    data.insert("error_register".to_string(), json!("Failed to register user. Please try again."));
+                    let body = hb.render("register", &data).unwrap_or_else(|_| "Template error".to_string());
+                    return HttpResponse::Ok().body(body);
+                }
             }
         }
-        Err(_) => HttpResponse::InternalServerError().body("Database error"),
+        Err(_) => {
+            // If database error, reroute to register page with handlebars message
+            let mut data = serde_json::Map::new();
+            data.insert("error_database".to_string(), json!("Error retrieving user from database. Please try again later."));
+            let body = hb.render("register", &data).unwrap_or_else(|_| "Template error".to_string());
+            return HttpResponse::Ok().body(body);
+        }
     }
 }
 // Serves the register page at /register
 // #[get("/register")]
-async fn register(req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
-    let success_message = req.query_string();
+async fn register(_req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+    // let success_message = req.query_string();
     let mut data = serde_json::Map::new();
-
-    if !success_message.is_empty() {
-        data.insert("success".to_string(), json!(success_message));
-    }
     let body = hb.render("register",&data).unwrap_or_else(|_| "Template error".to_string());
     HttpResponse::Ok().body(body)
 }
