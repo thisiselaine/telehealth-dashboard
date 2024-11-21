@@ -42,7 +42,7 @@ struct AppState {
 }
 
 // Handler for the `/services` endpoint
-async fn services_handler(query: web::Query<QueryParams>) -> impl Responder {
+async fn services_handler(req: HttpRequest, query: web::Query<QueryParams>) -> impl Responder {
     let api_key = std::env::var("GOOGLE_MAPS_API_KEY")
         .expect("GOOGLE_MAPS_API_KEY must be set in environment");
 
@@ -74,9 +74,19 @@ async fn services_handler(query: web::Query<QueryParams>) -> impl Responder {
         }
     };
 
+    // Request username cookie 
+    let mut isLoggedIn = false;
+    let username = req.cookie("username").map(|cookie| cookie.value().to_string());
+    if let Some(username) = username {
+        if !username.is_empty() {
+            isLoggedIn = true;
+        }
+    }
+
     HttpResponse::Ok().json(json!({
         "coordinates": coordinates,
         "providers": providers,
+        "isLoggedIn": isLoggedIn
     }))
 }
 

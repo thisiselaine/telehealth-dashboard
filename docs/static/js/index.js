@@ -23,7 +23,8 @@ async function fetchHealthServices(location, serviceType, useCurLocation) {
         }
 
         const data = await response.json();
-        const { coordinates, providers } = data;
+        const { coordinates, providers, isLoggedIn } = data;
+        console.log(isLoggedIn);
 
         providers.forEach(provider => {
             provider.services = provider.services || []; // Ensure services is an array
@@ -45,14 +46,14 @@ async function fetchHealthServices(location, serviceType, useCurLocation) {
             return;
         }
 
-        populateCarousel(providers, markers);
+        populateCarousel(providers, markers, isLoggedIn);
     } catch (error) {
         console.error('Error fetching health services:', error);
         headerDiv.innerHTML = '<p class="text-danger">Failed to load health services.</p>';
     }
 }
 
-function populateCarousel(providers, markers) {
+function populateCarousel(providers, markers, isLoggedIn) {
     const carouselInner = document.querySelector('#resultsCarousel .carousel-inner');
     const carouselDiv = document.getElementById('resultsCarousel');
     carouselDiv.hidden = false;
@@ -68,7 +69,7 @@ function populateCarousel(providers, markers) {
     // Populate carousel and link cards to markers
     providers.forEach((service) => {
         console.log(service);
-        const card = createServiceCard(service);
+        const card = createServiceCard(service, isLoggedIn);
 
         // Find the corresponding marker
         const markerEntry = markers.find(({ provider }) => provider.name === service.name && provider.address === service.address);
@@ -87,31 +88,53 @@ function populateCarousel(providers, markers) {
             });
 
             const starButton = card.querySelector('.star-button');
-            starButton.addEventListener('click', function() {
-                const starIcon = starButton.querySelector('.star-icon');
-                // If the star icon is solid, change it to regular (unfavorited)
-                if (starIcon.classList.contains('fas')) {
-                    starIcon.classList.remove('fas');
-                    starIcon.classList.add('far');
-                }
-                // If the star icon is regular, change it to solid (favorited)
-                else {
-                    starIcon.classList.remove('far');
-                    starIcon.classList.add('fas');
+            if (!starButton.classList.contains('disabled')) {
+                starButton.addEventListener('click', function() {
+                    const starIcon = starButton.querySelector('.star-icon');
+                    // If the star icon is solid, change it to regular (unfavorited)
+                    if (starIcon.classList.contains('fas')) {
+                        starIcon.classList.remove('fas');
+                        starIcon.classList.add('far');
+                    }
+                    // If the star icon is regular, change it to solid (favorited)
+                    else {
+                        starIcon.classList.remove('far');
+                        starIcon.classList.add('fas');
 
-                    // Get the service details from the star button's data attributes
-                    var photo = starButton.getAttribute('data-photo');
-                    var name = starButton.getAttribute('data-name');
-                    var address = starButton.getAttribute('data-address');
-                    // const phone = starButton.getAttribute('data-phone');
-                    var rating = starButton.getAttribute('data-rating');
-                    saveFavorites(photo, name, address, rating);
-                }
-            });
+                        // Get the service details from the star button's data attributes
+                        var photo = starButton.getAttribute('data-photo');
+                        var name = starButton.getAttribute('data-name');
+                        var address = starButton.getAttribute('data-address');
+                        // const phone = starButton.getAttribute('data-phone');
+                        var rating = starButton.getAttribute('data-rating');
+                        saveFavorites(photo, name, address, rating);
+                    }
+                });
+            } else {
+                starButton.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    showLoginAlert();
+                });
+            }
         }
-
         carouselInner.appendChild(card);
     });
+}
+// New function to show login alert
+function showLoginAlert() {
+    // Check if alert already exists to prevent multiple alerts
+    if (document.getElementById('login-alert')) return;
+
+    const alertHTML = `
+    <div id="login-alert" class="alert alert-warning alert-dismissible fade show" role="alert">
+        <strong>Please log in</strong> to save favorites.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    `;
+
+    // Insert the alert at the top of the container
+    const container = document.querySelector('.container');
+    container.insertAdjacentHTML('afterbegin', alertHTML);
 }
 
 // Function to save favorites
@@ -258,10 +281,28 @@ function generateUniqueId() {
 }
 
 // Function to create a Bootstrap card for a service
-function createServiceCard(service) {
+function createServiceCard(service, isLoggedIn = false) {
     const card = document.createElement('div');
     card.classList.add('card'); // Bootstrap card classes
     const uniqueId = `services-${generateUniqueId()}`;
+
+    const starButtonHTML = isLoggedIn ? `
+    <a class="btn btn-primary star-button"
+            data-photo="${service.photo_url || '/static/images/default_image.png'}"
+            data-name="${service.name}" 
+            data-address="${service.address}" 
+            data-rating="${service.rating || ''}">
+            <i class="far fa-star star-icon"></i>
+        </a>`
+        : `
+        <a class="btn btn-primary star-button disabled" style="pointer-events: none;"
+            data-toggle="popover"
+            data-trigger="hover"
+            title="Login Required"
+            data-content="Please log in to save and view your favorites."
+            aria-disabled="true" disabled>
+            <i class="far fa-star star-icon"></i>
+        </a>`;
 
     card.innerHTML = `
     <div class="position-relative">
@@ -278,13 +319,7 @@ function createServiceCard(service) {
                     <p class="card-text">${service.address}</p>
                     <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
                     <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : 'No ratings'}</p>
-                    <a class="btn btn-primary star-button"
-                    data-photo="${service.photo_url || '/static/images/default_image.png'}"
-                    data-name="${service.name}" 
-                    data-address="${service.address}" 
-                    data-rating="${service.rating || ''}">
-                    <i class="far fa-star star-icon"></i>
-                    </a>
+                    ${starButtonHTML}
                     ${
                         service.services && service.services.length > 0
                             ? `<button class="btn btn-primary toggle-services" data-bs-toggle="collapse" 
