@@ -105,12 +105,6 @@ function populateCarousel(providers, markers) {
                     var address = starButton.getAttribute('data-address');
                     // const phone = starButton.getAttribute('data-phone');
                     var rating = starButton.getAttribute('data-rating');
-                    // Check the types of each variable
-                    // console.log('photo:', typeof photo, photo);
-                    // console.log('name:', typeof name, name);
-                    // console.log('address:', typeof address, address);
-                    // console.log('rating:', typeof rating, rating);
-                    // Send a POST request to the server to save the favorites
                     saveFavorites(photo, name, address, rating);
                 }
             });
@@ -156,7 +150,6 @@ function saveFavorites(photo, name, address, rating) {
         })
         .then((data) => {
             console.log('Favorite saved:', data);
-            alert('Favorite saved successfully!');
         })
         .catch((error) => {
             console.error('Error saving favorite:', error);
@@ -284,7 +277,7 @@ function createServiceCard(service) {
                     <h5 class="card-title">${service.name}</h5>
                     <p class="card-text">${service.address}</p>
                     <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
-                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : ''}</p>
+                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : 'No ratings'}</p>
                     <a class="btn btn-primary star-button"
                     data-photo="${service.photo_url || '/static/images/default_image.png'}"
                     data-name="${service.name}" 
@@ -292,7 +285,6 @@ function createServiceCard(service) {
                     data-rating="${service.rating || ''}">
                     <i class="far fa-star star-icon"></i>
                     </a>
-                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : 'No ratings'}</p>
                     ${
                         service.services && service.services.length > 0
                             ? `<button class="btn btn-primary toggle-services" data-bs-toggle="collapse" 

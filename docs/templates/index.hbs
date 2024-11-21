@@ -82,7 +82,7 @@
                 <ul class="navbar-nav ms-auto">
                     {{#if logged_in}}
                     <li class="nav-item">
-                        <a class="nav-link text-white" href="#">Welcome, {{username}}!</a>
+                        <a class="nav-link text-white" href="/profile">Welcome, {{username}}!</a>
                     </li>
                     <form id="logout-form" action="/logout" method="POST">
                         <button type="submit" class="nav-link text-white" style="border:none; font:inherit; cursor:pointer; outline:inherit; background: none;" href="#">Logout</a>
