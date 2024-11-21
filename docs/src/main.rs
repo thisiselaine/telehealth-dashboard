@@ -6,12 +6,14 @@ use actix_web::{get, post, web, App, HttpServer, HttpRequest, Responder, HttpRes
 use actix_web::cookie::{Cookie, CookieBuilder};
 use actix_files::NamedFile;
 use serde_json::json;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 
 use sqlx::{SqlitePool};
 use handlebars::Handlebars;
 use std::sync::Mutex;
 use std::borrow::Cow;
+
+use log::{debug, error};
 
 #[derive(Deserialize)]
 struct QueryParams {
@@ -27,12 +29,11 @@ struct LoginData {
     password: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct FavoriteService {
     photo: String,
     name: String,
     address: String,
-    phone: String,
     rating: String,
 }
 
@@ -86,49 +87,67 @@ async fn api_key_handler() -> impl Responder {
     HttpResponse::Ok().body(api_key)
 }
 
-// #[post("/favorites")]
-async fn save_favorites(req: HttpRequest, favorite: web::Json<FavoriteService>, pool: web::Data<SqlitePool>, cookies: web::Data<actix_web::cookie::CookieJar>,) -> impl Responder {
-    // Log the received favorite service data
-    println!("Received favorite: {:?}", favorite);
-    println!("Hello!");
+#[post("/favorites")]
+async fn save_favorites(
+    req: HttpRequest,
+    favorite: web::Json<FavoriteService>,
+    pool: web::Data<SqlitePool>,
+) -> impl Responder {
+    println!("Processing save_favorites request...");
+    println!("All Cookies: {:?}", req.cookies());
 
-    let user_id = cookies.get("user_id").map(|cookie| cookie.value().to_string()).unwrap_or_else(|| "".to_string());
-    if user_id.is_empty() {
-        return HttpResponse::Unauthorized().body("User not logged in");
-    }
+    // Extract user ID from cookies
+    let user_id_cookie = req.cookie("user_id").map(|cookie| cookie.value().to_string());
+    if let Some(user_id_str) = user_id_cookie {
+        match user_id_str.parse::<i64>() {
+            Ok(user_id) => {
+                // Convert rating to REAL in SQL database
+                // let rating = favorite.rating.parse::<f64>().unwrap_or(0.0);
+                // Insert the favorite service into the database
+                let query_result = sqlx::query!(
+                    "INSERT INTO favorites (user_id, photo, title, address, rating) VALUES (?, ?, ?, ?, ?)",
+                    user_id,
+                    favorite.photo,
+                    favorite.name,
+                    favorite.address,
+                    favorite.rating
+                )
+                .execute(pool.get_ref())
+                .await;
 
-    // Insert the favorite service into the database
-    match insert_favorite(&pool, &favorite, user_id).await {
-        Ok(_) => {
-            println!("Favorite saved successfully.");
-            HttpResponse::Ok().body("Favorite saved")
+                match query_result {
+                    Ok(_) => {
+                        println!("Favorite saved successfully.");
+                        HttpResponse::Ok().json(json!({
+                            "status": "success",
+                            "message": "Favorite saved successfully."
+                        }))
+                    }
+                    Err(e) => {
+                        HttpResponse::InternalServerError().json(json!({
+                            "status": "error",
+                            "message": "Failed to save favorite. Please try again later."
+                        }))
+                    }
+                }
+            }
+            Err(_) => {
+                println!("Invalid user ID in cookie.");
+                HttpResponse::BadRequest().json(json!({
+                    "status": "error",
+                    "message": "Invalid user ID."
+                }))
+            }
         }
-        Err(e) => {
-            println!("Error: {:?}", e);
-            HttpResponse::InternalServerError().body("Failed to save favorite")
-        }
+    } else {
+        println!("User not logged in.");
+        HttpResponse::Unauthorized().json(json!({
+            "status": "error",
+            "message": "User not logged in. Please log in and try again."
+        }))
     }
 }
 
-// Inserts a favorite service into the database
-async fn insert_favorite(pool: &SqlitePool, favorite: &FavoriteService, user_id: String) -> Result<(), sqlx::Error> {
-    println!("Inserting favorite into database...");
-
-    sqlx::query!(
-        "INSERT INTO favorites (user_id, photo, title, address, phone, rating) VALUES ($1, $2, $3, $4, $5, $6)",
-        user_id,
-        favorite.photo,
-        favorite.name,
-        favorite.address,
-        favorite.phone,
-        favorite.rating
-    )
-    .execute(pool)
-    .await?;
-
-    println!("Favorite saved successfully.");
-    Ok(())
-}
 
 // Handler for the `/login` endpoint
 #[post("/login")]
@@ -256,6 +275,7 @@ async fn profile(hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> 
 // Handler for the `/logout` endpoint
 #[post("/logout")]
 async fn logout(state: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
+
     // Set the logout flag in the shared state
     {
         let mut logout_flag = state.logout_flag.lock().unwrap();
@@ -342,12 +362,13 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone())) // Share the database pool across handlers
             .app_data(web::Data::new(handlebars.clone())) // Share the handlebars instance
             .app_data(state.clone()) // Share the application state
+            .app_data(web::JsonConfig::default())
             .route("/api-key", web::get().to(api_key_handler)) // Endpoint to serve the API key
             .route("/services", web::get().to(services_handler)) // Endpoint for health services
             .route("/", web::get().to(index)) // Endpoint for index page
             .route("/profile", web::get().to(profile)) // Endpoint for profile page
             .route("/register", web::get().to(register)) // Endpoint for register page
-            .route("/favorites", web::post().to(save_favorites)) // Endpoint for saving favorites
+            .service(save_favorites) // Endpoint for saving favorites
             .service(login) // Endpoint for login page
             .service(login_handler) // Endpoint for login form submission
             .service(register_handler) // Endpoint for register form submission

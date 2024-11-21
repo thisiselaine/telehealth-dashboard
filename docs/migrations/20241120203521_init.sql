@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS favorites (
     photo TEXT NOT NULL,
     title TEXT NOT NULL,
     address TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    rating REAL NOT NULL,
+    rating TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
