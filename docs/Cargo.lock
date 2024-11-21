@@ -573,6 +573,7 @@ dependencies = [
  "actix-web",
  "dotenv",
  "handlebars",
+ "log",
  "reqwest",
  "serde",
  "serde_json",

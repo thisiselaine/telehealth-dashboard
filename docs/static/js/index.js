@@ -85,10 +85,83 @@ function populateCarousel(providers, markers) {
                 // Pan to the marker's position
                 markerEntry.marker.getMap().panTo(markerEntry.marker.getPosition());
             });
+
+            const starButton = card.querySelector('.star-button');
+            starButton.addEventListener('click', function() {
+                const starIcon = starButton.querySelector('.star-icon');
+                // If the star icon is solid, change it to regular (unfavorited)
+                if (starIcon.classList.contains('fas')) {
+                    starIcon.classList.remove('fas');
+                    starIcon.classList.add('far');
+                }
+                // If the star icon is regular, change it to solid (favorited)
+                else {
+                    starIcon.classList.remove('far');
+                    starIcon.classList.add('fas');
+
+                    // Get the service details from the star button's data attributes
+                    var photo = starButton.getAttribute('data-photo');
+                    var name = starButton.getAttribute('data-name');
+                    var address = starButton.getAttribute('data-address');
+                    // const phone = starButton.getAttribute('data-phone');
+                    var rating = starButton.getAttribute('data-rating');
+                    // Check the types of each variable
+                    // console.log('photo:', typeof photo, photo);
+                    // console.log('name:', typeof name, name);
+                    // console.log('address:', typeof address, address);
+                    // console.log('rating:', typeof rating, rating);
+                    // Send a POST request to the server to save the favorites
+                    saveFavorites(photo, name, address, rating);
+                }
+            });
         }
 
         carouselInner.appendChild(card);
     });
+}
+
+// Function to save favorites
+function saveFavorites(photo, name, address, rating) {
+    console.log('Saving favorite:', photo, name, address, rating);
+    // Ensure inputs are valid
+    if (!photo || !name || !address || !rating == null) {
+        console.error('Invalid data provided to saveFavorites');
+        alert('Please provide all required fields.');
+        return;
+    }
+
+    // Send POST request
+    fetch('/favorites', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                photo: photo,
+                name: name,
+                address: address,
+                rating: rating,
+            }),
+        })
+        .then((response) => {
+            if (!response.ok) {
+                // Debug response for errors
+                console.error('Failed response:', response);
+                // Return json data OR text based on the response
+                return response.json().then((data) => {
+                    throw new Error(data.error || 'Failed to save favorite');
+                });
+            }
+            return response.json();
+        })
+        .then((data) => {
+            console.log('Favorite saved:', data);
+            alert('Favorite saved successfully!');
+        })
+        .catch((error) => {
+            console.error('Error saving favorite:', error);
+            alert('Failed to save favorite. Please try again.');
+        });
 }
 
 
@@ -211,6 +284,14 @@ function createServiceCard(service) {
                     <h5 class="card-title">${service.name}</h5>
                     <p class="card-text">${service.address}</p>
                     <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
+                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : ''}</p>
+                    <a class="btn btn-primary star-button"
+                    data-photo="${service.photo_url || '/static/images/default_image.png'}"
+                    data-name="${service.name}" 
+                    data-address="${service.address}" 
+                    data-rating="${service.rating || ''}">
+                    <i class="far fa-star star-icon"></i>
+                    </a>
                     <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : 'No ratings'}</p>
                     ${
                         service.services && service.services.length > 0
@@ -289,6 +370,7 @@ document.getElementById('locationBtn').addEventListener('click', async function(
     userLocation = await getUserLocation();
     const serviceType = document.getElementById('serviceType').value;
     fetchHealthServices(userLocation, serviceType, true); // Call the fetchHealthServices function with the zip code
+    favoriteCard();
 });
 
 document.addEventListener('click', function (event) {

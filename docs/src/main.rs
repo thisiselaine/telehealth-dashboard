@@ -8,9 +8,12 @@ use actix_files::NamedFile;
 use serde_json::json;
 use serde::{Deserialize};
 
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool};
 use handlebars::Handlebars;
 use std::sync::Mutex;
+use std::borrow::Cow;
+
+use log::{debug, error};
 
 #[derive(Deserialize)]
 struct QueryParams {
@@ -24,6 +27,14 @@ struct QueryParams {
 struct LoginData {
     username: String,
     password: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct FavoriteService {
+    photo: String,
+    name: String,
+    address: String,
+    rating: String,
 }
 
 struct AppState {
@@ -76,6 +87,67 @@ async fn api_key_handler() -> impl Responder {
     HttpResponse::Ok().body(api_key)
 }
 
+#[post("/favorites")]
+async fn save_favorites(
+    req: HttpRequest,
+    favorite: web::Json<FavoriteService>,
+    pool: web::Data<SqlitePool>,
+) -> impl Responder {
+    println!("Processing save_favorites request...");
+    println!("All Cookies: {:?}", req.cookies());
+
+    // Extract user ID from cookies
+    let user_id_cookie = req.cookie("user_id").map(|cookie| cookie.value().to_string());
+    if let Some(user_id_str) = user_id_cookie {
+        match user_id_str.parse::<i64>() {
+            Ok(user_id) => {
+                // Convert rating to REAL in SQL database
+                // let rating = favorite.rating.parse::<f64>().unwrap_or(0.0);
+                // Insert the favorite service into the database
+                let query_result = sqlx::query!(
+                    "INSERT INTO favorites (user_id, photo, title, address, rating) VALUES (?, ?, ?, ?, ?)",
+                    user_id,
+                    favorite.photo,
+                    favorite.name,
+                    favorite.address,
+                    favorite.rating
+                )
+                .execute(pool.get_ref())
+                .await;
+
+                match query_result {
+                    Ok(_) => {
+                        println!("Favorite saved successfully.");
+                        HttpResponse::Ok().json(json!({
+                            "status": "success",
+                            "message": "Favorite saved successfully."
+                        }))
+                    }
+                    Err(e) => {
+                        HttpResponse::InternalServerError().json(json!({
+                            "status": "error",
+                            "message": "Failed to save favorite. Please try again later."
+                        }))
+                    }
+                }
+            }
+            Err(_) => {
+                println!("Invalid user ID in cookie.");
+                HttpResponse::BadRequest().json(json!({
+                    "status": "error",
+                    "message": "Invalid user ID."
+                }))
+            }
+        }
+    } else {
+        println!("User not logged in.");
+        HttpResponse::Unauthorized().json(json!({
+            "status": "error",
+            "message": "User not logged in. Please log in and try again."
+        }))
+    }
+}
+
 
 // Handler for the `/login` endpoint
 #[post("/login")]
@@ -100,13 +172,19 @@ async fn login_handler(
 
             if is_valid {
                 // Set a cookie with the username on successful login
-                let cookie = CookieBuilder::new("username", username.clone())
+                let username_cookie = CookieBuilder::new("username", username.clone())
+                    .path("/")
+                    .finish();
+
+                // Set a cookie with the user ID on successful login
+                let user_id_cookie = CookieBuilder::new("user_id", Cow::from(user.id.unwrap().to_string()))
                     .path("/")
                     .finish();
 
                 // Redirect back to the index page
                 return HttpResponse::Found()
-                    .cookie(cookie) // Attach the cookie to the response
+                    .cookie(username_cookie) // Attach the cookie to the response
+                    .cookie(user_id_cookie) // Attach the user ID cookie to the response
                     .append_header(("Location", "/")) // Redirect to the index page
                     .finish();
             } else {
@@ -160,25 +238,44 @@ async fn register_handler(
             .await;
 
             match result {
-                Ok(res) if res.rows_affected() == 1 => HttpResponse::Created().body("User created"),
-                _ => HttpResponse::InternalServerError().body("Failed to create user"),
+                Ok(res) if res.rows_affected() == 1 => {
+                    // Redirect to the /register page with a success message
+                    let success_message = format!("Success!");
+                    return HttpResponse::Found()
+                        .header("Location", format!("/register?success={}", success_message))
+                        .finish();
+                }
+                _ => HttpResponse::InternalServerError().body("Failed to register user"),
             }
         }
         Err(_) => HttpResponse::InternalServerError().body("Database error"),
     }
 }
-
 // Serves the register page at /register
-#[get("/register")]
-async fn register(_req: HttpRequest) -> Result<NamedFile> {
-    NamedFile::open_async("./static/register.html").await.map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("File open error: {}", e))
-    })
+// #[get("/register")]
+async fn register(req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+    let success_message = req.query_string();
+    let mut data = serde_json::Map::new();
+
+    if !success_message.is_empty() {
+        data.insert("success".to_string(), json!(success_message));
+    }
+    let body = hb.render("register",&data).unwrap_or_else(|_| "Template error".to_string());
+    HttpResponse::Ok().body(body)
+}
+
+// Serves the profile page at /profile
+// #[get("/profile")]
+async fn profile(hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+    let data = serde_json::Map::new();
+    let body = hb.render("profile", &data).unwrap_or_else(|_| "Template error".to_string());
+    HttpResponse::Ok().body(body)
 }
 
 // Handler for the `/logout` endpoint
 #[post("/logout")]
 async fn logout(state: web::Data<AppState>, _req: HttpRequest) -> impl Responder {
+
     // Set the logout flag in the shared state
     {
         let mut logout_flag = state.logout_flag.lock().unwrap();
@@ -189,11 +286,17 @@ async fn logout(state: web::Data<AppState>, _req: HttpRequest) -> impl Responder
     let cookie = Cookie::build("username", "")
         .path("/")
         .finish();
+
+    // Clear the user ID cookie by setting it to an empty value
+    let user_id_cookie = Cookie::build("user_id", "")
+        .path("/")
+        .finish();
     
     // Respond with a redirect to the index page
     HttpResponse::Found()
         .append_header(("Location", "/"))
         .cookie(cookie) // Include the cleared cookie to remove the username
+        .cookie(user_id_cookie) // Include the cleared user ID cookie
         .finish()
 }
 
@@ -206,9 +309,6 @@ async fn index(req: HttpRequest, hb: web::Data<Handlebars<'_>>, state: web::Data
     if let Some(username) = username {
         if !username.is_empty() {
             data.insert("username".to_string(), json!(username));
-            // Debug 
-            println!("User {} is logged in", username);
-
             data.insert("logged_in".to_string(), json!(true));
         } else {
             data.insert("logged_in".to_string(), json!(false));
@@ -244,7 +344,13 @@ async fn main() -> std::io::Result<()> {
     // Initialize handlebars template engine
     let mut handlebars = Handlebars::new();
     handlebars.register_template_file("index", "./templates/index.hbs")
-        .expect("Failed to register templates directory");
+        .expect("Failed to register index");
+
+    handlebars.register_template_file("profile", "./templates/profile.hbs")
+        .expect("Failed to register profile");
+
+    handlebars.register_template_file("register", "./templates/register.hbs")
+        .expect("Failed to register register");
 
     // Create the application state
     let state = web::Data::new(AppState {
@@ -256,11 +362,14 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone())) // Share the database pool across handlers
             .app_data(web::Data::new(handlebars.clone())) // Share the handlebars instance
             .app_data(state.clone()) // Share the application state
+            .app_data(web::JsonConfig::default())
             .route("/api-key", web::get().to(api_key_handler)) // Endpoint to serve the API key
             .route("/services", web::get().to(services_handler)) // Endpoint for health services
             .route("/", web::get().to(index)) // Endpoint for index page
+            .route("/profile", web::get().to(profile)) // Endpoint for profile page
+            .route("/register", web::get().to(register)) // Endpoint for register page
+            .service(save_favorites) // Endpoint for saving favorites
             .service(login) // Endpoint for login page
-            .service(register) // Endpoint for register page
             .service(login_handler) // Endpoint for login form submission
             .service(register_handler) // Endpoint for register form submission
             .service(logout) // Endpoint for logout

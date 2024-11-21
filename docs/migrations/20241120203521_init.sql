@@ -1,3 +1,4 @@
+-- Add migration script here
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS favorites;
 
@@ -12,7 +13,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS favorites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    location_name TEXT NOT NULL,
-    location_address TEXT NOT NULL,
+    photo TEXT NOT NULL,
+    title TEXT NOT NULL,
+    address TEXT NOT NULL,
+    rating TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
