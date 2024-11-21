@@ -13,7 +13,7 @@ use handlebars::Handlebars;
 use std::sync::Mutex;
 use std::borrow::Cow;
 
-use log::{debug, error};
+use handlebars::{Context, Helper, HelperResult, Output, RenderContext};
 
 #[derive(Deserialize)]
 struct QueryParams {
@@ -154,6 +154,7 @@ async fn save_favorites(
 async fn login_handler(
     form: web::Form<LoginData>,
     pool: web::Data<SqlitePool>,
+    hb: web::Data<Handlebars<'_>>,
 ) -> impl Responder {
     let LoginData { username, password } = form.into_inner();
 
@@ -188,20 +189,36 @@ async fn login_handler(
                     .append_header(("Location", "/")) // Redirect to the index page
                     .finish();
             } else {
-                HttpResponse::Unauthorized().body("Invalid credentials")
+                // If invalid credentials, reroute to login page with handlebars message
+                let mut data = serde_json::Map::new();
+                data.insert("error_invalid_credentials".to_string(), json!("Invalid credentials. Please try again."));
+                let body = hb.render("login", &data).unwrap_or_else(|_| "Template error".to_string());
+                return HttpResponse::Ok().body(body);
             }
         }
-        Ok(None) => HttpResponse::Unauthorized().body("Invalid credentials"),
-        Err(_) => HttpResponse::InternalServerError().body("Database error"),
+        Ok(None) => {
+            // If user not found, reroute to login page with handlebars message
+            let mut data = serde_json::Map::new();
+            data.insert("error_not_found".to_string(), json!("User not found. Please register for an account."));
+            let body = hb.render("login", &data).unwrap_or_else(|_| "Template error".to_string());
+            return HttpResponse::Ok().body(body);
+        }
+        Err(_) => {
+            // If database error, reroute to login page with handlebars message
+            let mut data = serde_json::Map::new();
+            data.insert("error_database".to_string(), json!("Error retrieving user from database. Please try again later."));
+            let body = hb.render("login", &data).unwrap_or_else(|_| "Template error".to_string());
+            return HttpResponse::Ok().body(body);
+        }
     }
 }
 
-// Serves the login page at /login
+// Serves the handlebars login page at /login
 #[get("/login")]
-async fn login(_req: HttpRequest) -> Result<NamedFile> {
-    NamedFile::open_async("./static/login.html").await.map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("File open error: {}", e))
-    })
+async fn login(hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+    let data = serde_json::Map::new();
+    let body = hb.render("login", &data).unwrap_or_else(|_| "Template error".to_string());
+    HttpResponse::Ok().body(body)
 }
 
 // Handler for the `/register` endpoint
@@ -266,10 +283,70 @@ async fn register(req: HttpRequest, hb: web::Data<Handlebars<'_>>, _state: web::
 
 // Serves the profile page at /profile
 // #[get("/profile")]
-async fn profile(hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
-    let data = serde_json::Map::new();
-    let body = hb.render("profile", &data).unwrap_or_else(|_| "Template error".to_string());
-    HttpResponse::Ok().body(body)
+async fn profile(req: HttpRequest, pool: web::Data<SqlitePool>, hb: web::Data<Handlebars<'_>>, _state: web::Data<AppState>) -> impl Responder {
+    // Extract the user ID from the cookies
+    let user_id_cookie = req.cookie("user_id").and_then(|cookie| cookie.value().parse::<i64>().ok());
+    let mut data = serde_json::Map::new();
+
+    // Add username from cookie 
+    if let Some(username) = req.cookie("username").map(|cookie| cookie.value().to_string()) {
+        data.insert("username".to_string(), json!(username));
+    }
+
+    // Fetch user's favorites from the database using username cookie 
+        // Fetch user's favorites if logged in
+
+        if let Some(user_id) = user_id_cookie {
+
+            match sqlx::query!(
+    
+                "SELECT id, photo, title AS name, address, rating FROM favorites WHERE user_id = ?",
+    
+                user_id
+    
+            )
+    
+            .fetch_all(pool.get_ref())
+    
+            .await {
+    
+                Ok(favorites) => {
+    
+                    let favorites_json: Vec<serde_json::Value> = favorites.into_iter().map(|f| json!({
+    
+                        "id": f.id,
+    
+                        "photo": f.photo,
+    
+                        "name": f.name,
+    
+                        "address": f.address,
+    
+                        "rating": f.rating
+    
+                    })).collect();
+    
+                    
+    
+                    data.insert("favorites".to_string(), json!(favorites_json));
+    
+                }
+    
+                Err(_) => {
+    
+                    // Handle database error
+    
+                    data.insert("error".to_string(), json!("Could not fetch favorites"));
+    
+                }
+    
+            }
+    
+        }
+    
+        let body = hb.render("profile", &data).unwrap_or_else(|_| "Template error".to_string());
+    
+        HttpResponse::Ok().body(body)
 }
 
 // Handler for the `/logout` endpoint
@@ -351,6 +428,25 @@ async fn main() -> std::io::Result<()> {
 
     handlebars.register_template_file("register", "./templates/register.hbs")
         .expect("Failed to register register");
+
+    handlebars.register_template_file("login", "./templates/login.hbs")
+        .expect("Failed to register login");
+
+    handlebars.register_helper("times", Box::new(|h: &Helper, _: &Handlebars, _: &Context, _: &mut RenderContext, out: &mut dyn Output| -> HelperResult {
+        let param = h.param(0).unwrap();
+        let times = param.value().as_f64().unwrap_or(0.0) as usize;
+        for _ in 0..times {
+            out.write("*")?;
+        }
+        Ok(())
+    }));
+
+    handlebars.register_helper("subtract", Box::new(|h: &Helper, _: &Handlebars, _: &Context, _: &mut RenderContext, out: &mut dyn Output| -> HelperResult {
+        let first = h.param(0).unwrap().value().as_f64().unwrap_or(0.0);
+        let second = h.param(1).unwrap().value().as_f64().unwrap_or(0.0);
+        out.write(&(first - second).to_string())?;
+        Ok(())
+    }));
 
     // Create the application state
     let state = web::Data::new(AppState {

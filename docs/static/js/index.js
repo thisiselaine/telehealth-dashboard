@@ -105,12 +105,6 @@ function populateCarousel(providers, markers) {
                     var address = starButton.getAttribute('data-address');
                     // const phone = starButton.getAttribute('data-phone');
                     var rating = starButton.getAttribute('data-rating');
-                    // Check the types of each variable
-                    // console.log('photo:', typeof photo, photo);
-                    // console.log('name:', typeof name, name);
-                    // console.log('address:', typeof address, address);
-                    // console.log('rating:', typeof rating, rating);
-                    // Send a POST request to the server to save the favorites
                     saveFavorites(photo, name, address, rating);
                 }
             });
@@ -156,7 +150,6 @@ function saveFavorites(photo, name, address, rating) {
         })
         .then((data) => {
             console.log('Favorite saved:', data);
-            alert('Favorite saved successfully!');
         })
         .catch((error) => {
             console.error('Error saving favorite:', error);
