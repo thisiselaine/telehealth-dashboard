@@ -105,6 +105,16 @@
     </div>
     {{/if}}
 
+    {{#unless logged_in }}
+    <div id="login-alert" class="alert alert-primary alert-dismissible fade show" role="alert">
+        <svg class="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Warning:">
+            <use xlink:href="#info-fill"/>
+        </svg>
+        Please <strong><a href="/login" class="alert-link">log in</a></strong> to save favorites.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {{/unless}}
+
     <div class="container">
         <h1 class="text-center mb-4">Find Nearby Health Services</h1>
         <form id="zipForm" class="d-flex mb-3">
