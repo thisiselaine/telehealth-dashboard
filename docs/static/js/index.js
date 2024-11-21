@@ -277,7 +277,7 @@ function createServiceCard(service) {
                     <h5 class="card-title">${service.name}</h5>
                     <p class="card-text">${service.address}</p>
                     <p class="card-text">${service.phone ? `Phone: ${service.phone}` : ''}</p>
-                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : ''}</p>
+                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : 'No ratings'}</p>
                     <a class="btn btn-primary star-button"
                     data-photo="${service.photo_url || '/static/images/default_image.png'}"
                     data-name="${service.name}" 
@@ -285,7 +285,6 @@ function createServiceCard(service) {
                     data-rating="${service.rating || ''}">
                     <i class="far fa-star star-icon"></i>
                     </a>
-                    <p class="card-text">${service.rating ? `Rating: ${service.rating.toFixed(1)}` : 'No ratings'}</p>
                     ${
                         service.services && service.services.length > 0
                             ? `<button class="btn btn-primary toggle-services" data-bs-toggle="collapse" 
