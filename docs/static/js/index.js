@@ -88,7 +88,7 @@ function populateCarousel(providers, markers, isLoggedIn) {
             });
 
             const starButton = card.querySelector('.star-button');
-            if (!starButton.classList.contains('disabled')) {
+            if (!starButton.classList.contains('off')) {
                 starButton.addEventListener('click', function() {
                     const starIcon = starButton.querySelector('.star-icon');
                     // If the star icon is solid, change it to regular (unfavorited)
@@ -110,31 +110,10 @@ function populateCarousel(providers, markers, isLoggedIn) {
                         saveFavorites(photo, name, address, rating);
                     }
                 });
-            } else {
-                starButton.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    showLoginAlert();
-                });
             }
         }
         carouselInner.appendChild(card);
     });
-}
-// New function to show login alert
-function showLoginAlert() {
-    // Check if alert already exists to prevent multiple alerts
-    if (document.getElementById('login-alert')) return;
-
-    const alertHTML = `
-    <div id="login-alert" class="alert alert-warning alert-dismissible fade show" role="alert">
-        <strong>Please log in</strong> to save favorites.
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-    `;
-
-    // Insert the alert at the top of the container
-    const container = document.querySelector('.container');
-    container.insertAdjacentHTML('afterbegin', alertHTML);
 }
 
 // Function to save favorites
@@ -295,12 +274,13 @@ function createServiceCard(service, isLoggedIn = false) {
             <i class="far fa-star star-icon"></i>
         </a>`
         : `
-        <a class="btn btn-primary star-button disabled" style="pointer-events: none;"
+        <a class="btn btn-primary star-button off disabled" style="pointer-events: none;"
             data-toggle="popover"
             data-trigger="hover"
             title="Login Required"
-            data-content="Please log in to save and view your favorites."
-            aria-disabled="true" disabled>
+            data-content="Please log in to save and view your favorites." 
+            aria-disabled="true"
+            disabled>
             <i class="far fa-star star-icon"></i>
         </a>`;
 
